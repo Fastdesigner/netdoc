@@ -89,6 +89,18 @@ function fmt_date(?int $ts): string
     return $ts ? date('d.m.Y H:i', $ts) : '–';
 }
 
+function fmt_bytes(int $bytes): string
+{
+    $units = ['B', 'KB', 'MB', 'GB'];
+    $i = 0;
+    $n = (float) $bytes;
+    while ($n >= 1024 && $i < count($units) - 1) {
+        $n /= 1024;
+        $i++;
+    }
+    return ($i === 0 ? (string) $bytes : number_format($n, 1, ',', '.')) . ' ' . $units[$i];
+}
+
 /** Zeilen filtern: Treffer, wenn irgendeines der Felder $q (case-insensitiv) enthält. */
 function arr_search(array $rows, array $fields, string $q): array
 {

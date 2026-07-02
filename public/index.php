@@ -18,6 +18,12 @@ require dirname(__DIR__) . '/src/bootstrap.php';
 // Erlaubte Werte (top-level const werden nicht hoisted -> vor dem Routing deklarieren).
 const DEVICE_TYPES     = ['server', 'switch', 'router', 'firewall', 'accesspoint', 'nas', 'printer', 'client', 'vm', 'other'];
 const CRED_CATEGORIES  = ['login', 'ssh', 'rdp', 'vpn', 'web', 'database', 'wifi', 'api', 'other'];
+const ROLES            = ['admin', 'user'];
+
+// Datei-Upload: Limit und blockierte (ausführbare) Endungen.
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
+const BLOCKED_UPLOAD_EXT = ['php', 'php3', 'php4', 'php5', 'php7', 'phtml', 'phar', 'pht',
+    'cgi', 'pl', 'py', 'sh', 'exe', 'bat', 'cmd', 'com', 'htaccess', 'js', 'mjs'];
 
 $r        = param('r', 'home');
 $isPost   = $_SERVER['REQUEST_METHOD'] === 'POST';
@@ -149,6 +155,17 @@ switch ($r) {
     case 'note.save':     route_note_save($store, $user); break;
     case 'note.delete':   route_note_delete($store, $user); break;
 
+    case 'documents':        route_document_list($store); break;
+    case 'document.edit':    route_document_edit($store); break;
+    case 'document.save':    route_document_save($store, $user); break;
+    case 'document.download':route_document_download($store, $user); break;
+    case 'document.delete':  route_document_delete($store, $user); break;
+
+    case 'users':         require_admin($user); route_user_list($store); break;
+    case 'user.edit':     require_admin($user); route_user_edit($store); break;
+    case 'user.save':     require_admin($user); route_user_save($store, $user); break;
+    case 'user.delete':   require_admin($user); route_user_delete($store, $user); break;
+
     case 'search':        route_search($store); break;
 
     default:
@@ -174,6 +191,30 @@ function device_map(Store $store): array
 function device_options(Store $store): array
 {
     return arr_sort($store->all('devices'), 'name');
+}
+
+/** Nur Admins zulassen – sonst zurück zur Übersicht. */
+function require_admin(array $user): void
+{
+    if (($user['role'] ?? '') !== 'admin') {
+        flash('error', 'Dafür fehlen dir die Rechte.');
+        redirect('home');
+    }
+}
+
+function admin_count(Store $store): int
+{
+    return count(array_filter($store->all('users'), static fn($u) => ($u['role'] ?? '') === 'admin'));
+}
+
+/** Upload-Verzeichnis (außerhalb des Webroots, unter data/). */
+function uploads_dir(): string
+{
+    $dir = DATA . '/uploads';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0700, true);
+    }
+    return $dir;
 }
 
 // ============================================================================
@@ -308,10 +349,11 @@ function route_device_view(Store $store): void
     $byDevice = static fn(array $rows) => array_values(array_filter($rows,
         static fn($x) => (int) ($x['device_id'] ?? 0) === $id));
 
-    $creds    = arr_sort($byDevice($store->all('credentials')), 'title');
-    $notes    = arr_sort($byDevice($store->all('notes')), 'updated_at', true);
-    $products = arr_sort($byDevice($store->all('products')), 'name');
-    render('devices/view', $dev['name'], compact('dev', 'creds', 'notes', 'products'));
+    $creds     = arr_sort($byDevice($store->all('credentials')), 'title');
+    $notes     = arr_sort($byDevice($store->all('notes')), 'updated_at', true);
+    $products  = arr_sort($byDevice($store->all('products')), 'name');
+    $documents = arr_sort($byDevice($store->all('documents')), 'created_at', true);
+    render('devices/view', $dev['name'], compact('dev', 'creds', 'notes', 'products', 'documents'));
 }
 
 function route_device_delete(Store $store, array $user): void
@@ -584,4 +626,236 @@ function route_search(Store $store): void
             arr_sort(arr_search($store->all('notes'), ['title', 'body'], $q), 'updated_at', true), 0, 25);
     }
     render('search', 'Suche', ['q' => $q, 'results' => $results]);
+}
+
+// ============================================================================
+//  Dokumente (Upload/Download, außerhalb des Webroots gespeichert)
+// ============================================================================
+
+function route_document_list(Store $store): void
+{
+    $q    = param('q');
+    $map  = device_map($store);
+    $rows = arr_search($store->all('documents'), ['title', 'filename'], $q);
+    foreach ($rows as &$d) {
+        $d['device_name'] = $map[(int) ($d['device_id'] ?? 0)] ?? null;
+    }
+    unset($d);
+    $rows = arr_sort($rows, 'created_at', true);
+    render('documents/list', 'Dokumente', ['rows' => $rows, 'q' => $q]);
+}
+
+function route_document_edit(Store $store): void
+{
+    $id  = (int) param('id', '0');
+    $doc = $id ? $store->find('documents', $id) : null;
+    render('documents/edit', $id ? 'Dokument bearbeiten' : 'Dokument hochladen', [
+        'doc' => $doc, 'devices' => device_options($store), 'csrf' => $GLOBALS['csrf'],
+        'preselectDevice' => (int) param('device_id', '0'),
+        'maxBytes' => MAX_UPLOAD_BYTES,
+    ]);
+}
+
+function route_document_save(Store $store, array $user): void
+{
+    $id       = (int) param('id', '0');
+    $backTo   = $id ? ['id' => $id] : [];
+    $deviceId = (int) param('device_id', '0') ?: null;
+    $title    = param('title');
+
+    $file     = $_FILES['file'] ?? null;
+    $hasUpload = $file && ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+
+    if (!$id && !$hasUpload) {
+        flash('error', 'Bitte eine Datei auswählen.');
+        redirect('document.edit', $backTo);
+    }
+
+    $stored = $mime = $origName = null;
+    $size = 0;
+
+    if ($hasUpload) {
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            $msg = $file['error'] === UPLOAD_ERR_INI_SIZE || $file['error'] === UPLOAD_ERR_FORM_SIZE
+                ? 'Datei zu groß (Server-Limit).'
+                : 'Upload fehlgeschlagen (Fehlercode ' . (int) $file['error'] . ').';
+            flash('error', $msg);
+            redirect('document.edit', $backTo);
+        }
+        if ($file['size'] > MAX_UPLOAD_BYTES) {
+            flash('error', 'Datei überschreitet ' . fmt_bytes(MAX_UPLOAD_BYTES) . '.');
+            redirect('document.edit', $backTo);
+        }
+        $origName = basename((string) $file['name']);
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (in_array($ext, BLOCKED_UPLOAD_EXT, true)) {
+            flash('error', 'Dieser Dateityp ist aus Sicherheitsgründen nicht erlaubt.');
+            redirect('document.edit', $backTo);
+        }
+        $stored = bin2hex(random_bytes(16));
+        if (!move_uploaded_file($file['tmp_name'], uploads_dir() . '/' . $stored)) {
+            flash('error', 'Datei konnte nicht gespeichert werden (Schreibrechte in data/uploads?).');
+            redirect('document.edit', $backTo);
+        }
+        @chmod(uploads_dir() . '/' . $stored, 0600);
+        $mime = function_exists('mime_content_type')
+            ? (mime_content_type(uploads_dir() . '/' . $stored) ?: (string) $file['type'])
+            : (string) $file['type'];
+        $size = (int) $file['size'];
+    }
+
+    if ($id) {
+        $doc = $store->find('documents', $id);
+        if (!$doc) {
+            flash('error', 'Dokument nicht gefunden.');
+            redirect('documents');
+        }
+        $patch = [
+            'title'     => $title !== '' ? $title : $doc['title'],
+            'device_id' => $deviceId,
+            'notes'     => param_null('notes'),
+        ];
+        if ($hasUpload) {
+            @unlink(uploads_dir() . '/' . $doc['stored']); // alte Datei ersetzen
+            $patch += ['stored' => $stored, 'filename' => $origName, 'mime' => $mime, 'size' => $size];
+        }
+        $store->update('documents', $id, $patch + ['updated_at' => now()]);
+        audit($store, $user, 'update', 'document', $id);
+        flash('success', 'Dokument aktualisiert.');
+    } else {
+        $id = $store->insert('documents', [
+            'title'       => $title !== '' ? $title : $origName,
+            'filename'    => $origName,
+            'stored'      => $stored,
+            'mime'        => $mime,
+            'size'        => $size,
+            'device_id'   => $deviceId,
+            'notes'       => param_null('notes'),
+            'uploaded_by' => $user['username'],
+            'created_at'  => now(),
+            'updated_at'  => now(),
+        ]);
+        audit($store, $user, 'create', 'document', $id);
+        flash('success', 'Dokument hochgeladen.');
+    }
+    redirect('documents');
+}
+
+function route_document_download(Store $store, array $user): void
+{
+    $id  = (int) param('id', '0');
+    $doc = $store->find('documents', $id);
+    $path = $doc ? uploads_dir() . '/' . $doc['stored'] : '';
+    if (!$doc || !is_file($path)) {
+        http_response_code(404);
+        render('error', 'Nicht gefunden', ['message' => 'Datei nicht vorhanden.']);
+        return;
+    }
+    audit($store, $user, 'download', 'document', $id);
+
+    $name  = $doc['filename'] ?: ('dokument-' . $id);
+    $ascii = preg_replace('/[^\x20-\x7E]/', '_', $name); // ASCII-Fallback
+
+    header('Content-Type: ' . ($doc['mime'] ?: 'application/octet-stream'));
+    header('Content-Length: ' . filesize($path));
+    header("Content-Disposition: attachment; filename=\"{$ascii}\"; filename*=UTF-8''" . rawurlencode($name));
+    header('X-Content-Type-Options: nosniff');
+    readfile($path);
+    exit;
+}
+
+function route_document_delete(Store $store, array $user): void
+{
+    $id  = (int) param('id', '0');
+    $doc = $store->find('documents', $id);
+    if ($doc && !empty($doc['stored'])) {
+        @unlink(uploads_dir() . '/' . $doc['stored']);
+    }
+    $store->delete('documents', $id);
+    audit($store, $user, 'delete', 'document', $id);
+    flash('success', 'Dokument gelöscht.');
+    redirect('documents');
+}
+
+// ============================================================================
+//  Benutzerverwaltung (nur Admin)
+// ============================================================================
+
+function route_user_list(Store $store): void
+{
+    $rows = arr_sort($store->all('users'), 'username');
+    render('users/list', 'Benutzer', ['rows' => $rows]);
+}
+
+function route_user_edit(Store $store): void
+{
+    $id = (int) param('id', '0');
+    $u  = $id ? $store->find('users', $id) : null;
+    render('users/edit', $id ? 'Benutzer bearbeiten' : 'Neuer Benutzer',
+        ['u' => $u, 'roles' => ROLES, 'csrf' => $GLOBALS['csrf']]);
+}
+
+function route_user_save(Store $store, array $current): void
+{
+    $id       = (int) param('id', '0');
+    $username = param('username');
+    $email    = strtolower(param('email'));
+    $role     = in_array(param('role'), ROLES, true) ? param('role') : 'user';
+    $backTo   = $id ? ['id' => $id] : [];
+
+    $errors = [];
+    if (strlen($username) < 3)                       $errors[] = 'Benutzername muss mind. 3 Zeichen haben.';
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL))  $errors[] = 'Bitte eine gültige E-Mail-Adresse eingeben.';
+
+    // E-Mail muss eindeutig sein (Login erfolgt darüber).
+    $dupe = $store->findBy('users', 'email', $email);
+    if ($dupe && (int) $dupe['id'] !== $id)          $errors[] = 'Diese E-Mail wird bereits verwendet.';
+
+    // Letzten Admin nicht herabstufen.
+    if ($id && $role !== 'admin') {
+        $existing = $store->find('users', $id);
+        if ($existing && ($existing['role'] ?? '') === 'admin' && admin_count($store) <= 1) {
+            $errors[] = 'Der letzte Admin kann nicht herabgestuft werden.';
+        }
+    }
+
+    if ($errors) {
+        foreach ($errors as $e) flash('error', $e);
+        redirect('user.edit', $backTo);
+    }
+
+    if ($id) {
+        $store->update('users', $id, ['username' => $username, 'email' => $email, 'role' => $role]);
+        audit($store, $current, 'update', 'user', $id);
+        flash('success', 'Benutzer aktualisiert.');
+    } else {
+        $id = $store->insert('users', [
+            'username'   => $username,
+            'email'      => $email,
+            'role'       => $role,
+            'last_login' => null,
+            'created_at' => now(),
+        ]);
+        audit($store, $current, 'create', 'user', $id);
+        flash('success', 'Benutzer angelegt – er kann sich jetzt per E-Mail anmelden.');
+    }
+    redirect('users');
+}
+
+function route_user_delete(Store $store, array $current): void
+{
+    $id = (int) param('id', '0');
+    if ($id === (int) $current['id']) {
+        flash('error', 'Du kannst dein eigenes Konto nicht löschen.');
+        redirect('users');
+    }
+    $target = $store->find('users', $id);
+    if ($target && ($target['role'] ?? '') === 'admin' && admin_count($store) <= 1) {
+        flash('error', 'Der letzte Admin kann nicht gelöscht werden.');
+        redirect('users');
+    }
+    $store->delete('users', $id);
+    audit($store, $current, 'delete', 'user', $id);
+    flash('success', 'Benutzer gelöscht.');
+    redirect('users');
 }

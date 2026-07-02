@@ -4,16 +4,22 @@ $auth = $GLOBALS['auth'];
 $u = $auth->user();
 $active = param('r', 'home');
 $nav = [
-    'home'     => ['Übersicht', '▚'],
-    'devices'  => ['Geräte', '🖥'],
-    'creds'    => ['Zugänge', '🔑'],
-    'products' => ['Produkte', '🧾'],
-    'notes'    => ['Notizen', '📝'],
+    'home'      => ['Übersicht', '▚'],
+    'devices'   => ['Geräte', '🖥'],
+    'creds'     => ['Zugänge', '🔑'],
+    'products'  => ['Produkte', '🧾'],
+    'notes'     => ['Notizen', '📝'],
+    'documents' => ['Dokumente', '📎'],
 ];
+if (($u['role'] ?? '') === 'admin') {
+    $nav['users'] = ['Benutzer', '👥'];
+}
 function nav_active(string $key, string $active): string {
     // Unterrouten wie device.view der Hauptgruppe zuordnen.
     $group = explode('.', $active)[0];
-    $map = ['device' => 'devices', 'cred' => 'creds', 'creds' => 'creds', 'product' => 'products', 'products' => 'products', 'note' => 'notes', 'notes' => 'notes'];
+    $map = ['device' => 'devices', 'cred' => 'creds', 'creds' => 'creds', 'product' => 'products',
+            'products' => 'products', 'note' => 'notes', 'notes' => 'notes',
+            'document' => 'documents', 'documents' => 'documents', 'user' => 'users', 'users' => 'users'];
     $current = $map[$group] ?? $active;
     return $current === $key ? ' class="active"' : '';
 }

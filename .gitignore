@@ -1,3 +1,4 @@
 # Geheimnisse & Laufzeitdaten – NIEMALS committen
 /config/config.php
 /data/*.json
+/data/uploads/

@@ -48,6 +48,26 @@
     <?php endforeach; endif; ?>
 </section>
 
+<section class="card">
+    <div class="cardhead">
+        <h2>Dokumente</h2>
+        <a class="btn small" href="<?= url('document.edit', ['device_id' => $dev['id']]) ?>">+ Hochladen</a>
+    </div>
+    <?php if (!$documents): ?>
+        <p class="muted">Keine Dokumente.</p>
+    <?php else: ?>
+        <ul class="linklist">
+            <?php foreach ($documents as $doc): ?>
+                <li>
+                    <a href="<?= url('document.download', ['id' => $doc['id']]) ?>"><?= e($doc['title']) ?></a>
+                    <span class="muted small"><?= fmt_bytes((int) ($doc['size'] ?? 0)) ?></span>
+                    <a class="muted small" href="<?= url('document.edit', ['id' => $doc['id']]) ?>">bearbeiten</a>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</section>
+
 <?php if ($products): ?>
 <section class="card">
     <h2>Zugeordnete Produkte</h2>
