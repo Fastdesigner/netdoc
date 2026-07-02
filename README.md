@@ -1,0 +1,63 @@
+# NetDoc – schlanke IT-Netzwerk-Dokumentation
+
+Ein leichtgewichtiges Tool, um Ordnung in einen Netzwerk-„Saustall“ zu bringen:
+Server & Geräte, Zugänge/Verbindungsdaten, Produkte/Lizenzen und Notizen –
+verknüpfbar und durchsuchbar.
+
+## Eigenschaften
+
+- **Reines PHP, kein MySQL** – Daten in einer einzigen **SQLite**-Datei. Backup = Datei kopieren.
+- **Kein Composer, kein Build** – auf jeden 08/15-Webspace hochladen, fertig.
+- Geräte · Zugänge · Produkte/Lizenzen · Notizen, alles miteinander verknüpfbar.
+- Volltextsuche über alle Bereiche.
+
+## Sicherheit
+
+| Schutz | Umsetzung |
+|---|---|
+| Zugriffsschutz | Login-Pflicht, Passwort-Hashing (`password_hash`), gehärtete Session-Cookies (HttpOnly, SameSite, Secure) |
+| Brute-Force | Konto wird nach 5 Fehlversuchen 15 Min. gesperrt |
+| **Geheimnisse at-rest** | Passwörter & Lizenzschlüssel sind mit **AES-256-GCM** verschlüsselt; der Schlüssel liegt separat in `config/config.php`. Ein reiner DB-Diebstahl gibt die Zugänge **nicht** preis. |
+| SQL-Injection | ausschließlich Prepared Statements |
+| XSS | konsequentes Output-Escaping + Content-Security-Policy |
+| CSRF | Token-Pflicht auf allen schreibenden Requests |
+| Datei-Schutz | DB/Config/Code liegen außerhalb des Docroots (`public/`) **und** haben zusätzlich `deny`-`.htaccess` |
+| Nachvollziehbarkeit | Audit-Log (Login, Änderungen, Passwort-Anzeigen) in Tabelle `audit_log` |
+
+## Deployment auf dem Kunden-Webhost
+
+**Voraussetzungen:** PHP 8.0+ mit `pdo_sqlite` und `openssl` (Standard auf praktisch jedem Hoster).
+
+### Variante A – eigener Docroot (empfohlen)
+Domain/Subdomain so einstellen, dass der Docroot auf den **`public/`**-Ordner zeigt.
+Alles andere (DB, Config, Code) ist damit gar nicht erst über das Web erreichbar.
+
+### Variante B – fester Docroot (z. B. `public_html`)
+Kompletten Projektordner hochladen. Die mitgelieferten `deny`-`.htaccess` in
+`config/`, `data/`, `src/`, `views/` sperren den Zugriff. Aufruf dann über
+`https://…/netdoc/public/`.
+
+### Schritte
+1. Dateien per FTP/SFTP hochladen.
+2. Sicherstellen, dass `config/` und `data/` vom PHP-Prozess **beschreibbar** sind
+   (das Setup schreibt dorthin Key bzw. Datenbank).
+3. Im Browser aufrufen → **Setup-Seite** legt Admin-Konto an und erzeugt automatisch
+   den Verschlüsselungs-Schlüssel in `config/config.php`.
+4. **HTTPS verwenden.** In `config/config.php` bleibt `https_only => true`.
+
+## Backup & Wiederherstellung
+
+- Datenbank: `data/netdoc.sqlite` sichern.
+- Schlüssel: `config/config.php` **getrennt** von der DB aufbewahren.
+  > Ohne `app_key` sind verschlüsselte Passwörter/Lizenzen nicht wiederherstellbar!
+
+## Projektstruktur
+
+```
+netdoc/
+├─ public/          ← Docroot (index.php, assets, .htaccess)
+├─ src/             ← Klassen: Database, Crypto, Auth + Bootstrap/Helpers
+├─ views/           ← Templates
+├─ config/          ← config.php (Key) – nicht im Web erreichbar
+└─ data/            ← netdoc.sqlite – nicht im Web erreichbar
+```

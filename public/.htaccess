@@ -1,0 +1,16 @@
+# NetDoc – Schutz im Docroot (public/).
+# Nur PHP/Assets erlauben; alles Sensible liegt ohnehin eine Ebene höher.
+
+Options -Indexes
+
+# Kein direkter Zugriff auf versteckte Dateien.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+# Sicherheits-Header (werden zusätzlich auch in PHP gesetzt).
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+    Header set Referrer-Policy "same-origin"
+</IfModule>

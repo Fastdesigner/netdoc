@@ -1,0 +1,4 @@
+# NetDoc – dieses Verzeichnis darf NIE über das Web erreichbar sein.
+# Greift zusätzlich, falls der Docroot nicht auf public/ zeigt.
+Require all denied
+Deny from all

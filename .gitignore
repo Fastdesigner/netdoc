@@ -1,0 +1,5 @@
+# Geheimnisse & Laufzeitdaten – NIEMALS committen
+/config/config.php
+/data/*.sqlite
+/data/*.sqlite-shm
+/data/*.sqlite-wal
