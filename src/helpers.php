@@ -61,6 +61,36 @@ function fmt_date(?int $ts): string
     return $ts ? date('d.m.Y H:i', $ts) : '–';
 }
 
+/** Zeilen filtern: Treffer, wenn irgendeines der Felder $q (case-insensitiv) enthält. */
+function arr_search(array $rows, array $fields, string $q): array
+{
+    if ($q === '') {
+        return $rows;
+    }
+    return array_values(array_filter($rows, static function (array $r) use ($fields, $q): bool {
+        foreach ($fields as $f) {
+            if (isset($r[$f]) && $r[$f] !== null && stripos((string) $r[$f], $q) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }));
+}
+
+/** Nach einem Feld sortieren (Strings case-insensitiv). $desc kehrt die Reihenfolge um. */
+function arr_sort(array $rows, string $field, bool $desc = false): array
+{
+    usort($rows, static function (array $a, array $b) use ($field): int {
+        $va = $a[$field] ?? null;
+        $vb = $b[$field] ?? null;
+        if (is_numeric($va) && is_numeric($vb)) {
+            return $va <=> $vb;
+        }
+        return strcasecmp((string) $va, (string) $vb);
+    });
+    return $desc ? array_reverse($rows) : $rows;
+}
+
 /** View rendern und als String zurückgeben. */
 function view(string $name, array $data = []): string
 {

@@ -10,7 +10,7 @@ namespace NetDoc;
 
 require dirname(__DIR__) . '/src/bootstrap.php';
 
-/** @var Database $db */
+/** @var Store $store */
 /** @var Auth $auth */
 /** @var Crypto|null $crypto */
 /** @var bool $isInstalled */
@@ -27,7 +27,7 @@ $csrf     = $auth->csrfToken();
 if (!$isInstalled || $auth->isSetupNeeded()) {
     if ($r === 'setup' && $isPost) {
         $auth->checkCsrf();
-        handle_setup($db, $auth);
+        handle_setup($auth);
     }
     render_setup($auth, $isInstalled);
     exit;
@@ -39,10 +39,10 @@ if ($r === 'login') {
         $auth->checkCsrf();
         $res = $auth->attempt(param('username'), param('password'));
         if ($res['ok']) {
-            audit($db, $auth->user(), 'login');
+            audit($store, $auth->user(), 'login');
             redirect('home');
         }
-        audit($db, ['id' => null, 'username' => param('username')], 'login_failed');
+        audit($store, ['id' => null, 'username' => param('username')], 'login_failed');
         flash('error', $res['error'] ?? 'Login fehlgeschlagen.');
         redirect('login');
     }
@@ -51,7 +51,7 @@ if ($r === 'login') {
 }
 
 if ($r === 'logout') {
-    audit($db, $auth->user(), 'logout');
+    audit($store, $auth->user(), 'logout');
     $auth->logout();
     redirect('login');
 }
@@ -71,31 +71,31 @@ $user = $auth->user();
 
 // --- 4) Routing -------------------------------------------------------------
 switch ($r) {
-    case 'home':          route_home($db); break;
+    case 'home':          route_home($store); break;
 
-    case 'devices':       route_device_list($db); break;
-    case 'device.edit':   route_device_edit($db); break;
-    case 'device.save':   route_device_save($db, $user); break;
-    case 'device.view':   route_device_view($db, $crypto); break;
-    case 'device.delete': route_device_delete($db, $user); break;
+    case 'devices':       route_device_list($store); break;
+    case 'device.edit':   route_device_edit($store); break;
+    case 'device.save':   route_device_save($store, $user); break;
+    case 'device.view':   route_device_view($store); break;
+    case 'device.delete': route_device_delete($store, $user); break;
 
-    case 'creds':         route_cred_list($db); break;
-    case 'cred.edit':     route_cred_edit($db); break;
-    case 'cred.save':     route_cred_save($db, $crypto, $user); break;
-    case 'cred.reveal':   route_cred_reveal($db, $crypto, $user); break;
-    case 'cred.delete':   route_cred_delete($db, $user); break;
+    case 'creds':         route_cred_list($store); break;
+    case 'cred.edit':     route_cred_edit($store); break;
+    case 'cred.save':     route_cred_save($store, $crypto, $user); break;
+    case 'cred.reveal':   route_cred_reveal($store, $crypto, $user); break;
+    case 'cred.delete':   route_cred_delete($store, $user); break;
 
-    case 'products':      route_product_list($db); break;
-    case 'product.edit':  route_product_edit($db); break;
-    case 'product.save':  route_product_save($db, $crypto, $user); break;
-    case 'product.delete':route_product_delete($db, $user); break;
+    case 'products':      route_product_list($store); break;
+    case 'product.edit':  route_product_edit($store); break;
+    case 'product.save':  route_product_save($store, $crypto, $user); break;
+    case 'product.delete':route_product_delete($store, $user); break;
 
-    case 'notes':         route_note_list($db); break;
-    case 'note.edit':     route_note_edit($db); break;
-    case 'note.save':     route_note_save($db, $user); break;
-    case 'note.delete':   route_note_delete($db, $user); break;
+    case 'notes':         route_note_list($store); break;
+    case 'note.edit':     route_note_edit($store); break;
+    case 'note.save':     route_note_save($store, $user); break;
+    case 'note.delete':   route_note_delete($store, $user); break;
 
-    case 'search':        route_search($db); break;
+    case 'search':        route_search($store); break;
 
     default:
         http_response_code(404);
@@ -103,19 +103,39 @@ switch ($r) {
 }
 
 // ============================================================================
+//  Helfer
+// ============================================================================
+
+/** Map [Geräte-ID => Name] zum Anreichern von Verknüpfungen. */
+function device_map(Store $store): array
+{
+    $map = [];
+    foreach ($store->all('devices') as $d) {
+        $map[(int) $d['id']] = $d['name'];
+    }
+    return $map;
+}
+
+/** Geräteliste (id/name) für Auswahlfelder, nach Name sortiert. */
+function device_options(Store $store): array
+{
+    return arr_sort($store->all('devices'), 'name');
+}
+
+// ============================================================================
 //  Setup
 // ============================================================================
 
-function handle_setup(Database $db, Auth $auth): void
+function handle_setup(Auth $auth): void
 {
-    $user = param('username');
-    $pass = param('password');
-    $pass2 = param('password2');
-    $errors = [];
+    $username = param('username');
+    $pass     = param('password');
+    $pass2    = param('password2');
+    $errors   = [];
 
-    if (strlen($user) < 3)          $errors[] = 'Benutzername muss mind. 3 Zeichen haben.';
-    if (strlen($pass) < 10)         $errors[] = 'Passwort muss mind. 10 Zeichen haben.';
-    if ($pass !== $pass2)           $errors[] = 'Passwörter stimmen nicht überein.';
+    if (strlen($username) < 3) $errors[] = 'Benutzername muss mind. 3 Zeichen haben.';
+    if (strlen($pass) < 10)    $errors[] = 'Passwort muss mind. 10 Zeichen haben.';
+    if ($pass !== $pass2)      $errors[] = 'Passwörter stimmen nicht überein.';
 
     if ($errors) {
         foreach ($errors as $e) flash('error', $e);
@@ -137,7 +157,7 @@ function handle_setup(Database $db, Auth $auth): void
     }
     @chmod($configFile, 0600);
 
-    $auth->createUser($user, $pass);
+    $auth->createUser($username, $pass);
     flash('success', 'Einrichtung abgeschlossen. Bitte anmelden.');
     redirect('login');
 }
@@ -145,8 +165,8 @@ function handle_setup(Database $db, Auth $auth): void
 function render_setup(Auth $auth, bool $isInstalled): void
 {
     render('setup', 'Einrichtung', [
-        'csrf'        => $auth->csrfToken(),
-        'configExists'=> $isInstalled,
+        'csrf'         => $auth->csrfToken(),
+        'configExists' => $isInstalled,
     ]);
 }
 
@@ -154,19 +174,20 @@ function render_setup(Auth $auth, bool $isInstalled): void
 //  Dashboard
 // ============================================================================
 
-function route_home(Database $db): void
+function route_home(Store $store): void
 {
     $counts = [
-        'devices'  => (int) $db->one('SELECT COUNT(*) c FROM devices')['c'],
-        'creds'    => (int) $db->one('SELECT COUNT(*) c FROM credentials')['c'],
-        'products' => (int) $db->one('SELECT COUNT(*) c FROM products')['c'],
-        'notes'    => (int) $db->one('SELECT COUNT(*) c FROM notes')['c'],
+        'devices'  => $store->count('devices'),
+        'creds'    => $store->count('credentials'),
+        'products' => $store->count('products'),
+        'notes'    => $store->count('notes'),
     ];
-    $recent = $db->all('SELECT * FROM devices ORDER BY updated_at DESC LIMIT 8');
-    // Bald ablaufende Produkte/Lizenzen.
-    $expiring = $db->all(
-        "SELECT * FROM products WHERE expiry_date IS NOT NULL AND expiry_date != '' ORDER BY expiry_date ASC LIMIT 8"
-    );
+    $recent = array_slice(arr_sort($store->all('devices'), 'updated_at', true), 0, 8);
+
+    // Bald ablaufende Produkte/Lizenzen (mit gesetztem Ablaufdatum, aufsteigend).
+    $withExpiry = array_filter($store->all('products'), static fn($p) => !empty($p['expiry_date']));
+    $expiring   = array_slice(arr_sort($withExpiry, 'expiry_date'), 0, 8);
+
     render('dashboard', 'Übersicht', compact('counts', 'recent', 'expiring'));
 }
 
@@ -174,30 +195,23 @@ function route_home(Database $db): void
 //  Geräte / Server
 // ============================================================================
 
-function route_device_list(Database $db): void
+function route_device_list(Store $store): void
 {
-    $q = param('q');
-    if ($q !== '') {
-        $like = '%' . $q . '%';
-        $rows = $db->all(
-            'SELECT * FROM devices WHERE name LIKE ? OR ip LIKE ? OR hostname LIKE ? OR location LIKE ? ORDER BY name',
-            [$like, $like, $like, $like]
-        );
-    } else {
-        $rows = $db->all('SELECT * FROM devices ORDER BY name');
-    }
+    $q    = param('q');
+    $rows = arr_search($store->all('devices'), ['name', 'ip', 'hostname', 'location'], $q);
+    $rows = arr_sort($rows, 'name');
     render('devices/list', 'Geräte & Server', ['rows' => $rows, 'q' => $q]);
 }
 
-function route_device_edit(Database $db): void
+function route_device_edit(Store $store): void
 {
     $id  = (int) param('id', '0');
-    $dev = $id ? $db->one('SELECT * FROM devices WHERE id = ?', [$id]) : null;
+    $dev = $id ? $store->find('devices', $id) : null;
     render('devices/edit', $id ? 'Gerät bearbeiten' : 'Neues Gerät',
         ['dev' => $dev, 'types' => DEVICE_TYPES, 'csrf' => $GLOBALS['csrf']]);
 }
 
-function route_device_save(Database $db, array $user): void
+function route_device_save(Store $store, array $user): void
 {
     $id   = (int) param('id', '0');
     $name = param('name');
@@ -205,48 +219,58 @@ function route_device_save(Database $db, array $user): void
         flash('error', 'Name ist Pflicht.');
         redirect('device.edit', $id ? ['id' => $id] : []);
     }
-    $type = in_array(param('type'), DEVICE_TYPES, true) ? param('type') : 'other';
-    $data = [
-        $name, $type, param_null('hostname'), param_null('ip'), param_null('location'),
-        param_null('vendor'), param_null('model'), param_null('os'),
-        param('status') ?: 'active', param_null('notes'),
+    $row = [
+        'name'     => $name,
+        'type'     => in_array(param('type'), DEVICE_TYPES, true) ? param('type') : 'other',
+        'hostname' => param_null('hostname'),
+        'ip'       => param_null('ip'),
+        'location' => param_null('location'),
+        'vendor'   => param_null('vendor'),
+        'model'    => param_null('model'),
+        'os'       => param_null('os'),
+        'status'   => param('status') ?: 'active',
+        'notes'    => param_null('notes'),
     ];
 
     if ($id) {
-        $db->run('UPDATE devices SET name=?,type=?,hostname=?,ip=?,location=?,vendor=?,model=?,os=?,status=?,notes=?,updated_at=? WHERE id=?',
-            [...$data, now(), $id]);
-        audit($db, $user, 'update', 'device', $id);
+        $store->update('devices', $id, $row + ['updated_at' => now()]);
+        audit($store, $user, 'update', 'device', $id);
         flash('success', 'Gerät aktualisiert.');
     } else {
-        $db->run('INSERT INTO devices (name,type,hostname,ip,location,vendor,model,os,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-            [...$data, now(), now()]);
-        $id = $db->lastId();
-        audit($db, $user, 'create', 'device', $id);
+        $id = $store->insert('devices', $row + ['created_at' => now(), 'updated_at' => now()]);
+        audit($store, $user, 'create', 'device', $id);
         flash('success', 'Gerät angelegt.');
     }
     redirect('device.view', ['id' => $id]);
 }
 
-function route_device_view(Database $db, ?Crypto $crypto): void
+function route_device_view(Store $store): void
 {
     $id  = (int) param('id', '0');
-    $dev = $db->one('SELECT * FROM devices WHERE id = ?', [$id]);
+    $dev = $store->find('devices', $id);
     if (!$dev) {
         http_response_code(404);
         render('error', 'Nicht gefunden', ['message' => 'Gerät existiert nicht.']);
         return;
     }
-    $creds    = $db->all('SELECT * FROM credentials WHERE device_id = ? ORDER BY title', [$id]);
-    $notes    = $db->all('SELECT * FROM notes WHERE device_id = ? ORDER BY updated_at DESC', [$id]);
-    $products = $db->all('SELECT * FROM products WHERE device_id = ? ORDER BY name', [$id]);
+    $byDevice = static fn(array $rows) => array_values(array_filter($rows,
+        static fn($x) => (int) ($x['device_id'] ?? 0) === $id));
+
+    $creds    = arr_sort($byDevice($store->all('credentials')), 'title');
+    $notes    = arr_sort($byDevice($store->all('notes')), 'updated_at', true);
+    $products = arr_sort($byDevice($store->all('products')), 'name');
     render('devices/view', $dev['name'], compact('dev', 'creds', 'notes', 'products'));
 }
 
-function route_device_delete(Database $db, array $user): void
+function route_device_delete(Store $store, array $user): void
 {
     $id = (int) param('id', '0');
-    $db->run('DELETE FROM devices WHERE id = ?', [$id]);
-    audit($db, $user, 'delete', 'device', $id);
+    $store->delete('devices', $id);
+    // Verknüpfungen lösen (Ersatz für ON DELETE SET NULL).
+    foreach (['credentials', 'notes', 'products'] as $coll) {
+        $store->nullifyReferences($coll, 'device_id', $id);
+    }
+    audit($store, $user, 'delete', 'device', $id);
     flash('success', 'Gerät gelöscht.');
     redirect('devices');
 }
@@ -255,34 +279,31 @@ function route_device_delete(Database $db, array $user): void
 //  Zugänge / Verbindungsdaten (verschlüsselt)
 // ============================================================================
 
-function route_cred_list(Database $db): void
+function route_cred_list(Store $store): void
 {
-    $q = param('q');
-    $sql = 'SELECT c.*, d.name AS device_name FROM credentials c LEFT JOIN devices d ON d.id = c.device_id';
-    if ($q !== '') {
-        $like = '%' . $q . '%';
-        $rows = $db->all($sql . ' WHERE c.title LIKE ? OR c.username LIKE ? OR c.url LIKE ? ORDER BY c.title',
-            [$like, $like, $like]);
-    } else {
-        $rows = $db->all($sql . ' ORDER BY c.title');
+    $q     = param('q');
+    $map   = device_map($store);
+    $rows  = arr_search($store->all('credentials'), ['title', 'username', 'url'], $q);
+    foreach ($rows as &$c) {
+        $c['device_name'] = $map[(int) ($c['device_id'] ?? 0)] ?? null;
     }
+    unset($c);
+    $rows = arr_sort($rows, 'title');
     render('credentials/list', 'Zugänge & Verbindungen', ['rows' => $rows, 'q' => $q]);
 }
 
-function route_cred_edit(Database $db): void
+function route_cred_edit(Store $store): void
 {
     $id   = (int) param('id', '0');
-    $cred = $id ? $db->one('SELECT * FROM credentials WHERE id = ?', [$id]) : null;
-    $devices = $db->all('SELECT id, name FROM devices ORDER BY name');
+    $cred = $id ? $store->find('credentials', $id) : null;
     render('credentials/edit', $id ? 'Zugang bearbeiten' : 'Neuer Zugang', [
-        'cred' => $cred, 'devices' => $devices,
+        'cred' => $cred, 'devices' => device_options($store),
         'categories' => CRED_CATEGORIES, 'csrf' => $GLOBALS['csrf'],
-        // Vorbelegung Geräte-Zuordnung, wenn von Geräteansicht kommend.
         'preselectDevice' => (int) param('device_id', '0'),
     ]);
 }
 
-function route_cred_save(Database $db, ?Crypto $crypto, array $user): void
+function route_cred_save(Store $store, ?Crypto $crypto, array $user): void
 {
     $id    = (int) param('id', '0');
     $title = param('title');
@@ -290,13 +311,11 @@ function route_cred_save(Database $db, ?Crypto $crypto, array $user): void
         flash('error', 'Titel ist Pflicht.');
         redirect('cred.edit', $id ? ['id' => $id] : []);
     }
-    $category = in_array(param('category'), CRED_CATEGORIES, true) ? param('category') : 'other';
-    $deviceId = (int) param('device_id', '0') ?: null;
 
     // Passwort nur neu verschlüsseln, wenn im Formular ein neues eingegeben wurde.
     $secretInput = param('secret');
     if ($id) {
-        $existing = $db->one('SELECT secret_enc FROM credentials WHERE id = ?', [$id]);
+        $existing  = $store->find('credentials', $id);
         $secretEnc = $existing['secret_enc'] ?? null;
         if ($secretInput !== '') {
             $secretEnc = $crypto->encrypt($secretInput);
@@ -305,46 +324,49 @@ function route_cred_save(Database $db, ?Crypto $crypto, array $user): void
         $secretEnc = $secretInput !== '' ? $crypto->encrypt($secretInput) : null;
     }
 
-    $data = [
-        $deviceId, $title, $category, param_null('username'), $secretEnc,
-        param_null('url'), param_null('port'), param_null('notes'),
+    $row = [
+        'device_id'  => (int) param('device_id', '0') ?: null,
+        'title'      => $title,
+        'category'   => in_array(param('category'), CRED_CATEGORIES, true) ? param('category') : 'other',
+        'username'   => param_null('username'),
+        'secret_enc' => $secretEnc,
+        'url'        => param_null('url'),
+        'port'       => param_null('port'),
+        'notes'      => param_null('notes'),
     ];
 
     if ($id) {
-        $db->run('UPDATE credentials SET device_id=?,title=?,category=?,username=?,secret_enc=?,url=?,port=?,notes=?,updated_at=? WHERE id=?',
-            [...$data, now(), $id]);
-        audit($db, $user, 'update', 'credential', $id);
+        $store->update('credentials', $id, $row + ['updated_at' => now()]);
+        audit($store, $user, 'update', 'credential', $id);
         flash('success', 'Zugang aktualisiert.');
     } else {
-        $db->run('INSERT INTO credentials (device_id,title,category,username,secret_enc,url,port,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
-            [...$data, now(), now()]);
-        $id = $db->lastId();
-        audit($db, $user, 'create', 'credential', $id);
+        $id = $store->insert('credentials', $row + ['created_at' => now(), 'updated_at' => now()]);
+        audit($store, $user, 'create', 'credential', $id);
         flash('success', 'Zugang angelegt.');
     }
     redirect('creds');
 }
 
 /** Passwort-Klartext per XHR liefern – wird geloggt, damit Zugriffe nachvollziehbar sind. */
-function route_cred_reveal(Database $db, ?Crypto $crypto, array $user): void
+function route_cred_reveal(Store $store, ?Crypto $crypto, array $user): void
 {
     header('Content-Type: application/json');
     $id   = (int) param('id', '0');
-    $cred = $db->one('SELECT secret_enc FROM credentials WHERE id = ?', [$id]);
+    $cred = $store->find('credentials', $id);
     if (!$cred) {
         http_response_code(404);
         echo json_encode(['error' => 'not found']);
         return;
     }
-    audit($db, $user, 'reveal', 'credential', $id);
-    echo json_encode(['secret' => $crypto->decrypt($cred['secret_enc']) ?? '']);
+    audit($store, $user, 'reveal', 'credential', $id);
+    echo json_encode(['secret' => $crypto->decrypt($cred['secret_enc'] ?? null) ?? '']);
 }
 
-function route_cred_delete(Database $db, array $user): void
+function route_cred_delete(Store $store, array $user): void
 {
     $id = (int) param('id', '0');
-    $db->run('DELETE FROM credentials WHERE id = ?', [$id]);
-    audit($db, $user, 'delete', 'credential', $id);
+    $store->delete('credentials', $id);
+    audit($store, $user, 'delete', 'credential', $id);
     flash('success', 'Zugang gelöscht.');
     redirect('creds');
 }
@@ -353,29 +375,23 @@ function route_cred_delete(Database $db, array $user): void
 //  Produkte / Lizenzen
 // ============================================================================
 
-function route_product_list(Database $db): void
+function route_product_list(Store $store): void
 {
-    $q = param('q');
-    if ($q !== '') {
-        $like = '%' . $q . '%';
-        $rows = $db->all('SELECT * FROM products WHERE name LIKE ? OR vendor LIKE ? OR category LIKE ? ORDER BY name',
-            [$like, $like, $like]);
-    } else {
-        $rows = $db->all('SELECT * FROM products ORDER BY name');
-    }
+    $q    = param('q');
+    $rows = arr_search($store->all('products'), ['name', 'vendor', 'category'], $q);
+    $rows = arr_sort($rows, 'name');
     render('products/list', 'Produkte & Lizenzen', ['rows' => $rows, 'q' => $q]);
 }
 
-function route_product_edit(Database $db): void
+function route_product_edit(Store $store): void
 {
-    $id  = (int) param('id', '0');
-    $p   = $id ? $db->one('SELECT * FROM products WHERE id = ?', [$id]) : null;
-    $devices = $db->all('SELECT id, name FROM devices ORDER BY name');
+    $id = (int) param('id', '0');
+    $p  = $id ? $store->find('products', $id) : null;
     render('products/edit', $id ? 'Produkt bearbeiten' : 'Neues Produkt',
-        ['p' => $p, 'devices' => $devices, 'csrf' => $GLOBALS['csrf']]);
+        ['p' => $p, 'devices' => device_options($store), 'csrf' => $GLOBALS['csrf']]);
 }
 
-function route_product_save(Database $db, ?Crypto $crypto, array $user): void
+function route_product_save(Store $store, ?Crypto $crypto, array $user): void
 {
     $id   = (int) param('id', '0');
     $name = param('name');
@@ -383,46 +399,49 @@ function route_product_save(Database $db, ?Crypto $crypto, array $user): void
         flash('error', 'Name ist Pflicht.');
         redirect('product.edit', $id ? ['id' => $id] : []);
     }
-    $deviceId = (int) param('device_id', '0') ?: null;
 
     // Lizenzschlüssel ist ebenfalls ein Geheimnis -> verschlüsseln.
     $licInput = param('license');
     if ($id) {
-        $existing = $db->one('SELECT license_enc FROM products WHERE id = ?', [$id]);
-        $licEnc = $existing['license_enc'] ?? null;
+        $existing = $store->find('products', $id);
+        $licEnc   = $existing['license_enc'] ?? null;
         if ($licInput !== '') $licEnc = $crypto->encrypt($licInput);
     } else {
         $licEnc = $licInput !== '' ? $crypto->encrypt($licInput) : null;
     }
 
     $seats = param('seats');
-    $data = [
-        $name, param_null('vendor'), param_null('category'), $licEnc,
-        $seats === '' ? null : (int) $seats,
-        param_null('purchase_date'), param_null('expiry_date'),
-        param_null('cost'), param_null('supplier'), $deviceId, param_null('notes'),
+    $row = [
+        'name'          => $name,
+        'vendor'        => param_null('vendor'),
+        'category'      => param_null('category'),
+        'license_enc'   => $licEnc,
+        'seats'         => $seats === '' ? null : (int) $seats,
+        'purchase_date' => param_null('purchase_date'),
+        'expiry_date'   => param_null('expiry_date'),
+        'cost'          => param_null('cost'),
+        'supplier'      => param_null('supplier'),
+        'device_id'     => (int) param('device_id', '0') ?: null,
+        'notes'         => param_null('notes'),
     ];
 
     if ($id) {
-        $db->run('UPDATE products SET name=?,vendor=?,category=?,license_enc=?,seats=?,purchase_date=?,expiry_date=?,cost=?,supplier=?,device_id=?,notes=?,updated_at=? WHERE id=?',
-            [...$data, now(), $id]);
-        audit($db, $user, 'update', 'product', $id);
+        $store->update('products', $id, $row + ['updated_at' => now()]);
+        audit($store, $user, 'update', 'product', $id);
         flash('success', 'Produkt aktualisiert.');
     } else {
-        $db->run('INSERT INTO products (name,vendor,category,license_enc,seats,purchase_date,expiry_date,cost,supplier,device_id,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            [...$data, now(), now()]);
-        $id = $db->lastId();
-        audit($db, $user, 'create', 'product', $id);
+        $id = $store->insert('products', $row + ['created_at' => now(), 'updated_at' => now()]);
+        audit($store, $user, 'create', 'product', $id);
         flash('success', 'Produkt angelegt.');
     }
     redirect('products');
 }
 
-function route_product_delete(Database $db, array $user): void
+function route_product_delete(Store $store, array $user): void
 {
     $id = (int) param('id', '0');
-    $db->run('DELETE FROM products WHERE id = ?', [$id]);
-    audit($db, $user, 'delete', 'product', $id);
+    $store->delete('products', $id);
+    audit($store, $user, 'delete', 'product', $id);
     flash('success', 'Produkt gelöscht.');
     redirect('products');
 }
@@ -431,24 +450,28 @@ function route_product_delete(Database $db, array $user): void
 //  Notizen
 // ============================================================================
 
-function route_note_list(Database $db): void
+function route_note_list(Store $store): void
 {
-    $rows = $db->all('SELECT n.*, d.name AS device_name FROM notes n LEFT JOIN devices d ON d.id = n.device_id ORDER BY n.updated_at DESC');
+    $map  = device_map($store);
+    $rows = arr_sort($store->all('notes'), 'updated_at', true);
+    foreach ($rows as &$n) {
+        $n['device_name'] = $map[(int) ($n['device_id'] ?? 0)] ?? null;
+    }
+    unset($n);
     render('notes/list', 'Notizen', ['rows' => $rows]);
 }
 
-function route_note_edit(Database $db): void
+function route_note_edit(Store $store): void
 {
     $id   = (int) param('id', '0');
-    $note = $id ? $db->one('SELECT * FROM notes WHERE id = ?', [$id]) : null;
-    $devices = $db->all('SELECT id, name FROM devices ORDER BY name');
+    $note = $id ? $store->find('notes', $id) : null;
     render('notes/edit', $id ? 'Notiz bearbeiten' : 'Neue Notiz', [
-        'note' => $note, 'devices' => $devices, 'csrf' => $GLOBALS['csrf'],
+        'note' => $note, 'devices' => device_options($store), 'csrf' => $GLOBALS['csrf'],
         'preselectDevice' => (int) param('device_id', '0'),
     ]);
 }
 
-function route_note_save(Database $db, array $user): void
+function route_note_save(Store $store, array $user): void
 {
     $id    = (int) param('id', '0');
     $title = param('title');
@@ -456,26 +479,29 @@ function route_note_save(Database $db, array $user): void
         flash('error', 'Titel ist Pflicht.');
         redirect('note.edit', $id ? ['id' => $id] : []);
     }
-    $deviceId = (int) param('device_id', '0') ?: null;
-    $data = [$title, param_null('body'), $deviceId];
+    $row = [
+        'title'     => $title,
+        'body'      => param_null('body'),
+        'device_id' => (int) param('device_id', '0') ?: null,
+    ];
 
     if ($id) {
-        $db->run('UPDATE notes SET title=?,body=?,device_id=?,updated_at=? WHERE id=?', [...$data, now(), $id]);
-        audit($db, $user, 'update', 'note', $id);
+        $store->update('notes', $id, $row + ['updated_at' => now()]);
+        audit($store, $user, 'update', 'note', $id);
         flash('success', 'Notiz aktualisiert.');
     } else {
-        $db->run('INSERT INTO notes (title,body,device_id,created_at,updated_at) VALUES (?,?,?,?,?)', [...$data, now(), now()]);
-        audit($db, $user, 'create', 'note', $db->lastId());
+        $id = $store->insert('notes', $row + ['created_at' => now(), 'updated_at' => now()]);
+        audit($store, $user, 'create', 'note', $id);
         flash('success', 'Notiz angelegt.');
     }
     redirect('notes');
 }
 
-function route_note_delete(Database $db, array $user): void
+function route_note_delete(Store $store, array $user): void
 {
     $id = (int) param('id', '0');
-    $db->run('DELETE FROM notes WHERE id = ?', [$id]);
-    audit($db, $user, 'delete', 'note', $id);
+    $store->delete('notes', $id);
+    audit($store, $user, 'delete', 'note', $id);
     flash('success', 'Notiz gelöscht.');
     redirect('notes');
 }
@@ -484,16 +510,26 @@ function route_note_delete(Database $db, array $user): void
 //  Globale Suche
 // ============================================================================
 
-function route_search(Database $db): void
+function route_search(Store $store): void
 {
     $q = param('q');
     $results = ['devices' => [], 'creds' => [], 'products' => [], 'notes' => []];
     if ($q !== '') {
-        $like = '%' . $q . '%';
-        $results['devices']  = $db->all('SELECT * FROM devices WHERE name LIKE ? OR ip LIKE ? OR hostname LIKE ? OR notes LIKE ? ORDER BY name LIMIT 25', [$like, $like, $like, $like]);
-        $results['creds']    = $db->all('SELECT c.*, d.name AS device_name FROM credentials c LEFT JOIN devices d ON d.id=c.device_id WHERE c.title LIKE ? OR c.username LIKE ? OR c.url LIKE ? ORDER BY c.title LIMIT 25', [$like, $like, $like]);
-        $results['products'] = $db->all('SELECT * FROM products WHERE name LIKE ? OR vendor LIKE ? ORDER BY name LIMIT 25', [$like, $like]);
-        $results['notes']    = $db->all('SELECT * FROM notes WHERE title LIKE ? OR body LIKE ? ORDER BY updated_at DESC LIMIT 25', [$like, $like]);
+        $map = device_map($store);
+
+        $results['devices'] = array_slice(
+            arr_sort(arr_search($store->all('devices'), ['name', 'ip', 'hostname', 'notes'], $q), 'name'), 0, 25);
+
+        $creds = arr_search($store->all('credentials'), ['title', 'username', 'url'], $q);
+        foreach ($creds as &$c) { $c['device_name'] = $map[(int) ($c['device_id'] ?? 0)] ?? null; }
+        unset($c);
+        $results['creds'] = array_slice(arr_sort($creds, 'title'), 0, 25);
+
+        $results['products'] = array_slice(
+            arr_sort(arr_search($store->all('products'), ['name', 'vendor'], $q), 'name'), 0, 25);
+
+        $results['notes'] = array_slice(
+            arr_sort(arr_search($store->all('notes'), ['title', 'body'], $q), 'updated_at', true), 0, 25);
     }
     render('search', 'Suche', ['q' => $q, 'results' => $results]);
 }

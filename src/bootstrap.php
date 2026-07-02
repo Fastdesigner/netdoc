@@ -39,12 +39,9 @@ $secure = ($config['https_only'] ?? false)
     || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
     || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 
-// --- Datenbank --------------------------------------------------------------
-if (!is_dir(DATA)) {
-    @mkdir(DATA, 0700, true);
-}
-$db   = new Database(DATA . '/netdoc.sqlite');
-$auth = new Auth($db);
+// --- Datenspeicher (dateibasiert, JSON – keine DB-Erweiterung nötig) --------
+$store = new Store(DATA);
+$auth  = new Auth($store);
 
 // Krypto steht erst nach der Installation bereit (Key aus Config).
 $crypto = ($isInstalled && !empty($config['app_key']))
@@ -60,11 +57,15 @@ header('Referrer-Policy: same-origin');
 header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'");
 
 /** Audit-Eintrag schreiben. */
-function audit(Database $db, ?array $user, string $action, ?string $entity = null, ?int $entityId = null): void
+function audit(Store $store, ?array $user, string $action, ?string $entity = null, ?int $entityId = null): void
 {
-    $db->run(
-        'INSERT INTO audit_log (user_id, username, action, entity, entity_id, ip, created_at) VALUES (?,?,?,?,?,?,?)',
-        [$user['id'] ?? null, $user['username'] ?? null, $action, $entity, $entityId,
-         $_SERVER['REMOTE_ADDR'] ?? null, now()]
-    );
+    $store->insert('audit_log', [
+        'user_id'    => $user['id'] ?? null,
+        'username'   => $user['username'] ?? null,
+        'action'     => $action,
+        'entity'     => $entity,
+        'entity_id'  => $entityId,
+        'ip'         => $_SERVER['REMOTE_ADDR'] ?? null,
+        'created_at' => now(),
+    ]);
 }

@@ -11,7 +11,7 @@ final class Auth
     private const MAX_FAILED   = 5;      // Fehlversuche bis Sperre
     private const LOCK_SECONDS = 900;    // 15 Minuten Sperre
 
-    public function __construct(private Database $db) {}
+    public function __construct(private Store $store) {}
 
     /** Session gehärtet starten. Einmal pro Request aufrufen. */
     public static function startSession(bool $secure): void
@@ -29,7 +29,7 @@ final class Auth
 
     public function isSetupNeeded(): bool
     {
-        return (int) $this->db->one('SELECT COUNT(*) c FROM users')['c'] === 0;
+        return $this->store->count('users') === 0;
     }
 
     public function user(): ?array
@@ -44,16 +44,21 @@ final class Auth
 
     public function createUser(string $username, string $password, string $role = 'admin'): void
     {
-        $this->db->run(
-            'INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,?)',
-            [$username, password_hash($password, PASSWORD_DEFAULT), $role, now()]
-        );
+        $this->store->insert('users', [
+            'username'      => $username,
+            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+            'role'          => $role,
+            'failed_logins' => 0,
+            'locked_until'  => null,
+            'last_login'    => null,
+            'created_at'    => now(),
+        ]);
     }
 
     /** @return array{ok:bool,error?:string} */
     public function attempt(string $username, string $password): array
     {
-        $u = $this->db->one('SELECT * FROM users WHERE username = ?', [$username]);
+        $u = $this->store->findBy('users', 'username', $username);
 
         if ($u && $u['locked_until'] && (int) $u['locked_until'] > now()) {
             $mins = (int) ceil(((int) $u['locked_until'] - now()) / 60);
@@ -67,8 +72,10 @@ final class Auth
             if ($u) {
                 $failed = (int) $u['failed_logins'] + 1;
                 $lock   = $failed >= self::MAX_FAILED ? now() + self::LOCK_SECONDS : null;
-                $this->db->run('UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?',
-                    [$failed, $lock, $u['id']]);
+                $this->store->update('users', (int) $u['id'], [
+                    'failed_logins' => $failed,
+                    'locked_until'  => $lock,
+                ]);
             }
             return ['ok' => false, 'error' => 'Benutzername oder Passwort falsch.'];
         }
@@ -80,8 +87,11 @@ final class Auth
             'username' => $u['username'],
             'role'     => $u['role'],
         ];
-        $this->db->run('UPDATE users SET failed_logins = 0, locked_until = NULL, last_login = ? WHERE id = ?',
-            [now(), $u['id']]);
+        $this->store->update('users', (int) $u['id'], [
+            'failed_logins' => 0,
+            'locked_until'  => null,
+            'last_login'    => now(),
+        ]);
 
         return ['ok' => true];
     }

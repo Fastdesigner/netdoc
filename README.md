@@ -6,7 +6,7 @@ verknüpfbar und durchsuchbar.
 
 ## Eigenschaften
 
-- **Reines PHP, kein MySQL** – Daten in einer einzigen **SQLite**-Datei. Backup = Datei kopieren.
+- **Reines PHP, kein MySQL, keine DB-Erweiterung** – Daten liegen als **JSON-Dateien** im `data/`-Ordner (braucht nur `ext/json`, das in PHP immer dabei ist). Backup = Ordner kopieren.
 - **Kein Composer, kein Build** – auf jeden 08/15-Webspace hochladen, fertig.
 - Geräte · Zugänge · Produkte/Lizenzen · Notizen, alles miteinander verknüpfbar.
 - Volltextsuche über alle Bereiche.
@@ -17,7 +17,7 @@ verknüpfbar und durchsuchbar.
 |---|---|
 | Zugriffsschutz | Login-Pflicht, Passwort-Hashing (`password_hash`), gehärtete Session-Cookies (HttpOnly, SameSite, Secure) |
 | Brute-Force | Konto wird nach 5 Fehlversuchen 15 Min. gesperrt |
-| **Geheimnisse at-rest** | Passwörter & Lizenzschlüssel sind mit **AES-256-GCM** verschlüsselt; der Schlüssel liegt separat in `config/config.php`. Ein reiner DB-Diebstahl gibt die Zugänge **nicht** preis. |
+| **Geheimnisse at-rest** | Passwörter & Lizenzschlüssel sind mit **AES-256-GCM** verschlüsselt; der Schlüssel liegt separat in `config/config.php`. Ein reiner Diebstahl der Datendateien gibt die Zugänge **nicht** preis. |
 | SQL-Injection | ausschließlich Prepared Statements |
 | XSS | konsequentes Output-Escaping + Content-Security-Policy |
 | CSRF | Token-Pflicht auf allen schreibenden Requests |
@@ -26,7 +26,7 @@ verknüpfbar und durchsuchbar.
 
 ## Deployment auf dem Kunden-Webhost
 
-**Voraussetzungen:** PHP 8.0+ mit `pdo_sqlite` und `openssl` (Standard auf praktisch jedem Hoster).
+**Voraussetzungen:** PHP 8.1+ mit `openssl` (beides Standard). Es wird **keine** Datenbank-Erweiterung benötigt.
 
 ### Variante A – eigener Docroot (empfohlen)
 Domain/Subdomain so einstellen, dass der Docroot auf den **`public/`**-Ordner zeigt.
@@ -47,7 +47,7 @@ Kompletten Projektordner hochladen. Die mitgelieferten `deny`-`.htaccess` in
 
 ## Backup & Wiederherstellung
 
-- Datenbank: `data/netdoc.sqlite` sichern.
+- Daten: den kompletten `data/`-Ordner sichern (alle `*.json`).
 - Schlüssel: `config/config.php` **getrennt** von der DB aufbewahren.
   > Ohne `app_key` sind verschlüsselte Passwörter/Lizenzen nicht wiederherstellbar!
 
@@ -56,8 +56,8 @@ Kompletten Projektordner hochladen. Die mitgelieferten `deny`-`.htaccess` in
 ```
 netdoc/
 ├─ public/          ← Docroot (index.php, assets, .htaccess)
-├─ src/             ← Klassen: Database, Crypto, Auth + Bootstrap/Helpers
+├─ src/             ← Klassen: Store (JSON), Crypto, Auth + Bootstrap/Helpers
 ├─ views/           ← Templates
 ├─ config/          ← config.php (Key) – nicht im Web erreichbar
-└─ data/            ← netdoc.sqlite – nicht im Web erreichbar
+└─ data/            ← *.json (Datenbestand) – nicht im Web erreichbar
 ```
