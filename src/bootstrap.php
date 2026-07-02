@@ -41,7 +41,10 @@ $secure = ($config['https_only'] ?? false)
 
 // --- Datenspeicher (dateibasiert, JSON – keine DB-Erweiterung nötig) --------
 $store = new Store(DATA);
-$auth  = new Auth($store);
+
+// Der app_key dient auch als Pepper zum Hashen der Login-Codes/-Tokens.
+$auth   = new Auth($store, (string) ($config['app_key'] ?? ''));
+$mailer = new Mailer($config['mail'] ?? []);
 
 // Krypto steht erst nach der Installation bereit (Key aus Config).
 $crypto = ($isInstalled && !empty($config['app_key']))

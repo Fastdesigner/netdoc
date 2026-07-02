@@ -161,3 +161,5 @@ textarea { resize: vertical; }
 .secret { user-select: all; }
 .copy { cursor: pointer; border-bottom: 1px dashed var(--border); }
 .copy:hover { color: var(--accent); }
+
+.codeinput { font-family: monospace; font-size: 28px; letter-spacing: 8px; text-align: center; }

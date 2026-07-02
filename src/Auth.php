@@ -4,14 +4,19 @@ declare(strict_types=1);
 namespace NetDoc;
 
 /**
- * Authentifizierung, Session-Handling, CSRF-Schutz und Login-Rate-Limit.
+ * Passwortlose Authentifizierung (6-stelliger Code + Magic-Link),
+ * Session-Handling und CSRF-Schutz.
  */
 final class Auth
 {
-    private const MAX_FAILED   = 5;      // Fehlversuche bis Sperre
-    private const LOCK_SECONDS = 900;    // 15 Minuten Sperre
+    public const CODE_TTL     = 600;  // Code/Link 10 Minuten gültig
+    public const MAX_ATTEMPTS = 5;    // Falsche Code-Eingaben je Challenge
 
-    public function __construct(private Store $store) {}
+    /**
+     * @param string $pepper Serverseitiges Geheimnis (app_key) zum Hashen der Codes/Tokens.
+     *                       Liegt in config/ – getrennt von den Datendateien in data/.
+     */
+    public function __construct(private Store $store, private string $pepper) {}
 
     /** Session gehärtet starten. Einmal pro Request aufrufen. */
     public static function startSession(bool $secure): void
@@ -42,58 +47,117 @@ final class Auth
         return isset($_SESSION['user']);
     }
 
-    public function createUser(string $username, string $password, string $role = 'admin'): void
+    public function createUser(string $username, string $email, string $role = 'admin'): void
     {
         $this->store->insert('users', [
-            'username'      => $username,
-            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
-            'role'          => $role,
-            'failed_logins' => 0,
-            'locked_until'  => null,
-            'last_login'    => null,
-            'created_at'    => now(),
+            'username'   => $username,
+            'email'      => strtolower(trim($email)),
+            'role'       => $role,
+            'last_login' => null,
+            'created_at' => now(),
         ]);
     }
 
-    /** @return array{ok:bool,error?:string} */
-    public function attempt(string $username, string $password): array
+    // --- Passwortlose Anmeldung --------------------------------------------
+
+    /**
+     * Login-Code + Magic-Link-Token für eine Email erzeugen.
+     * Gibt bei unbekannter Email null zurück (der Aufrufer zeigt trotzdem
+     * dieselbe Meldung -> keine Rückschlüsse auf existierende Konten).
+     *
+     * @return array{challenge_id:int,code:string,token:string,user:array}|null
+     */
+    public function requestLogin(string $email): ?array
     {
-        $u = $this->store->findBy('users', 'username', $username);
-
-        if ($u && $u['locked_until'] && (int) $u['locked_until'] > now()) {
-            $mins = (int) ceil(((int) $u['locked_until'] - now()) / 60);
-            return ['ok' => false, 'error' => "Konto gesperrt. Erneut versuchen in {$mins} Min."];
+        $this->purgeExpiredCodes();
+        $user = $this->store->findBy('users', 'email', strtolower(trim($email)));
+        if (!$user) {
+            return null;
         }
 
-        // Timing-Angleichung, wenn User nicht existiert.
-        $hash = $u['password_hash'] ?? '$2y$10$usesomesillystringforsalthashabcdefghijklmnopqrstuv';
+        $code  = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $token = bin2hex(random_bytes(32));
 
-        if (!$u || !password_verify($password, $hash)) {
-            if ($u) {
-                $failed = (int) $u['failed_logins'] + 1;
-                $lock   = $failed >= self::MAX_FAILED ? now() + self::LOCK_SECONDS : null;
-                $this->store->update('users', (int) $u['id'], [
-                    'failed_logins' => $failed,
-                    'locked_until'  => $lock,
-                ]);
+        $id = $this->store->insert('login_codes', [
+            'user_id'    => (int) $user['id'],
+            'code_hash'  => $this->peppered($code),
+            'token_hash' => $this->peppered($token),
+            'expires_at' => now() + self::CODE_TTL,
+            'attempts'   => 0,
+            'created_at' => now(),
+        ]);
+
+        return ['challenge_id' => $id, 'code' => $code, 'token' => $token, 'user' => $user];
+    }
+
+    /** 6-stelligen Code zu einer laufenden Challenge prüfen. */
+    public function verifyCode(int $challengeId, string $code): array
+    {
+        $c = $challengeId ? $this->store->find('login_codes', $challengeId) : null;
+        if (!$c || (int) $c['expires_at'] < now()) {
+            if ($c) $this->store->delete('login_codes', $challengeId);
+            return ['ok' => false, 'error' => 'Code abgelaufen. Bitte neu anfordern.'];
+        }
+        if ((int) $c['attempts'] >= self::MAX_ATTEMPTS) {
+            $this->store->delete('login_codes', $challengeId);
+            return ['ok' => false, 'error' => 'Zu viele Fehlversuche. Bitte neuen Code anfordern.'];
+        }
+        if (!hash_equals((string) $c['code_hash'], $this->peppered(preg_replace('/\s+/', '', $code)))) {
+            $this->store->update('login_codes', $challengeId, ['attempts' => (int) $c['attempts'] + 1]);
+            return ['ok' => false, 'error' => 'Code falsch.'];
+        }
+        $this->completeLogin((int) $c['user_id'], $challengeId);
+        return ['ok' => true];
+    }
+
+    /** Magic-Link-Token prüfen (identifiziert die Challenge selbst, ohne Session). */
+    public function verifyMagic(string $token): bool
+    {
+        $this->purgeExpiredCodes();
+        $hash = $this->peppered(trim($token));
+        foreach ($this->store->all('login_codes') as $c) {
+            if (hash_equals((string) $c['token_hash'], $hash)) {
+                if ((int) $c['expires_at'] < now()) {
+                    $this->store->delete('login_codes', (int) $c['id']);
+                    return false;
+                }
+                $this->completeLogin((int) $c['user_id'], (int) $c['id']);
+                return true;
             }
-            return ['ok' => false, 'error' => 'Benutzername oder Passwort falsch.'];
         }
+        return false;
+    }
 
-        // Erfolg: Session-Fixation verhindern.
+    private function completeLogin(int $userId, int $challengeId): void
+    {
+        $u = $this->store->find('users', $userId);
+        if (!$u) {
+            return;
+        }
+        // Session-Fixation verhindern.
         session_regenerate_id(true);
         $_SESSION['user'] = [
             'id'       => (int) $u['id'],
             'username' => $u['username'],
             'role'     => $u['role'],
         ];
-        $this->store->update('users', (int) $u['id'], [
-            'failed_logins' => 0,
-            'locked_until'  => null,
-            'last_login'    => now(),
-        ]);
+        unset($_SESSION['login_challenge'], $_SESSION['login_email'], $_SESSION['login_sent_at']);
+        $this->store->update('users', $userId, ['last_login' => now()]);
+        $this->store->delete('login_codes', $challengeId);
+    }
 
-        return ['ok' => true];
+    private function peppered(string $value): string
+    {
+        return hash_hmac('sha256', $value, $this->pepper);
+    }
+
+    private function purgeExpiredCodes(): void
+    {
+        foreach ($this->store->all('login_codes') as $c) {
+            if ((int) $c['expires_at'] < now()) {
+                $this->store->delete('login_codes', (int) $c['id']);
+            }
+        }
     }
 
     public function logout(): void

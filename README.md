@@ -15,14 +15,23 @@ verknüpfbar und durchsuchbar.
 
 | Schutz | Umsetzung |
 |---|---|
-| Zugriffsschutz | Login-Pflicht, Passwort-Hashing (`password_hash`), gehärtete Session-Cookies (HttpOnly, SameSite, Secure) |
-| Brute-Force | Konto wird nach 5 Fehlversuchen 15 Min. gesperrt |
+| Zugriffsschutz | **Passwortlose Anmeldung**: 6-stelliger Code + Magic-Link per E-Mail. Kein Passwort gespeichert. Gehärtete Session-Cookies (HttpOnly, SameSite, Secure) |
+| Login-Codes | 10 Min. gültig, einmalig, max. 5 Fehlversuche je Code. Code-/Token-Hashes zusätzlich mit `app_key` gepeppert |
+| Enumeration | Login zeigt für existierende und nicht existierende Adressen dieselbe Reaktion |
 | **Geheimnisse at-rest** | Passwörter & Lizenzschlüssel sind mit **AES-256-GCM** verschlüsselt; der Schlüssel liegt separat in `config/config.php`. Ein reiner Diebstahl der Datendateien gibt die Zugänge **nicht** preis. |
 | SQL-Injection | ausschließlich Prepared Statements |
 | XSS | konsequentes Output-Escaping + Content-Security-Policy |
 | CSRF | Token-Pflicht auf allen schreibenden Requests |
 | Datei-Schutz | DB/Config/Code liegen außerhalb des Docroots (`public/`) **und** haben zusätzlich `deny`-`.htaccess` |
-| Nachvollziehbarkeit | Audit-Log (Login, Änderungen, Passwort-Anzeigen) in Tabelle `audit_log` |
+| Nachvollziehbarkeit | Audit-Log (Login, Code-Versand, Änderungen, Passwort-Anzeigen) in `data/audit_log.json` |
+
+### E-Mail-Versand
+
+Die Anmeldung braucht funktionierenden Mailversand. Konfiguration in `config/config.php` unter `mail`:
+
+- `transport: 'mail'` – nutzt PHP `mail()` (Standard, aktuell aktiv).
+- `transport: 'smtp'` – für später vorgesehen (host/port/user/pass/encryption); wichtig, sobald SPF/DKIM sauber sein müssen.
+- `from` leer lassen → `netdoc@<Hauptdomain>` wird automatisch verwendet.
 
 ## Deployment auf dem Kunden-Webhost
 

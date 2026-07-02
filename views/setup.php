@@ -15,13 +15,10 @@
         <label>Benutzername
             <input type="text" name="username" required autofocus minlength="3">
         </label>
-        <label>Passwort <small class="muted">(mind. 10 Zeichen)</small>
-            <input type="password" name="password" required minlength="10">
-        </label>
-        <label>Passwort wiederholen
-            <input type="password" name="password2" required minlength="10">
+        <label>E-Mail-Adresse <small class="muted">(für die Anmeldung per Code)</small>
+            <input type="email" name="email" required placeholder="du@example.com">
         </label>
         <button type="submit" class="btn primary block">Einrichten &amp; loslegen</button>
     </form>
-    <p class="muted small">Beim Einrichten wird automatisch ein Verschlüsselungs-Schlüssel erzeugt und in <code>config/config.php</code> abgelegt.</p>
+    <p class="muted small">Die Anmeldung erfolgt passwortlos: Du bekommst bei jedem Login einen 6-stelligen Code (oder Magic-Link) per E-Mail. Beim Einrichten wird automatisch ein Verschlüsselungs-Schlüssel in <code>config/config.php</code> erzeugt.</p>
 </div>

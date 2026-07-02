@@ -24,6 +24,34 @@ function redirect(string $route, array $params = []): never
     exit;
 }
 
+/** Basis-URL der Installation (Schema + Host + Verzeichnis), z.B. für Magic-Links. */
+function base_url(): string
+{
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $dir  = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/');
+    return $scheme . '://' . $host . $dir;
+}
+
+/** Absolute URL zu einer Route (für E-Mails/Links nach außen). */
+function absolute_url(string $route, array $params = []): string
+{
+    return base_url() . '/' . url($route, $params);
+}
+
+/** E-Mail für die Anzeige maskieren: max***@example.com */
+function mask_email(string $email): string
+{
+    $at = strpos($email, '@');
+    if ($at === false || $at < 1) {
+        return '***';
+    }
+    $name = substr($email, 0, $at);
+    $keep = min(3, max(1, $at - 1));
+    return substr($name, 0, $keep) . str_repeat('*', 3) . substr($email, $at);
+}
+
 /** Flash-Nachricht setzen (überlebt genau einen Redirect). */
 function flash(string $type, string $msg): void
 {

@@ -33,21 +33,75 @@ if (!$isInstalled || $auth->isSetupNeeded()) {
     exit;
 }
 
-// --- 2) Login / Logout ------------------------------------------------------
+// --- 2) Passwortlose Anmeldung (Code + Magic-Link) -------------------------
+
+// Magic-Link aus der E-Mail: Token prüfen -> direkt einloggen.
+if ($r === 'login.magic') {
+    if ($auth->verifyMagic(param('token'))) {
+        audit($store, $auth->user(), 'login', 'magic');
+        flash('success', 'Willkommen zurück!');
+        redirect('home');
+    }
+    flash('error', 'Link ungültig oder abgelaufen. Bitte neu anmelden.');
+    redirect('login');
+}
+
 if ($r === 'login') {
-    if ($isPost) {
-        $auth->checkCsrf();
-        $res = $auth->attempt(param('username'), param('password'));
-        if ($res['ok']) {
-            audit($store, $auth->user(), 'login');
-            redirect('home');
-        }
-        audit($store, ['id' => null, 'username' => param('username')], 'login_failed');
-        flash('error', $res['error'] ?? 'Login fehlgeschlagen.');
+    // "Andere Adresse" / Schritt zurücksetzen.
+    if (param('reset') === '1') {
+        unset($_SESSION['login_challenge'], $_SESSION['login_email'], $_SESSION['login_sent_at']);
         redirect('login');
     }
-    render('login', 'Anmelden', ['csrf' => $csrf]);
+
+    if ($isPost) {
+        $auth->checkCsrf();
+        $email = param('email');
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            flash('error', 'Bitte eine gültige E-Mail-Adresse eingeben.');
+            redirect('login');
+        }
+        // Resend-Schutz: höchstens alle 30 Sekunden ein neuer Code.
+        $lastSent = (int) ($_SESSION['login_sent_at'] ?? 0);
+        if ($lastSent && now() - $lastSent < 30 && !empty($_SESSION['login_challenge'])) {
+            flash('error', 'Bitte kurz warten, bevor du einen neuen Code anforderst.');
+            redirect('login');
+        }
+
+        if ($req = $auth->requestLogin($email)) {
+            $magic = absolute_url('login.magic', ['token' => $req['token']]);
+            $mailer->sendLoginCode($req['user']['email'], $req['user']['username'], $req['code'], $magic);
+            $_SESSION['login_challenge'] = $req['challenge_id'];
+            audit($store, ['id' => $req['user']['id'], 'username' => $req['user']['username']], 'login_code_sent');
+        }
+        // Immer identische Reaktion – keine Rückschlüsse auf existierende Konten.
+        $_SESSION['login_email']   = $email;
+        $_SESSION['login_sent_at'] = now();
+        flash('success', 'Falls die Adresse hinterlegt ist, haben wir dir einen Code geschickt.');
+        redirect('login');
+    }
+
+    $pending = !empty($_SESSION['login_challenge']) || !empty($_SESSION['login_email']);
+    render('login', 'Anmelden', [
+        'csrf'  => $csrf,
+        'step'  => $pending ? 'code' : 'email',
+        'email' => $_SESSION['login_email'] ?? '',
+    ]);
     exit;
+}
+
+// Code-Eingabe prüfen.
+if ($r === 'login.verify') {
+    if ($isPost) {
+        $auth->checkCsrf();
+        $res = $auth->verifyCode((int) ($_SESSION['login_challenge'] ?? 0), param('code'));
+        if ($res['ok']) {
+            audit($store, $auth->user(), 'login', 'code');
+            flash('success', 'Willkommen zurück!');
+            redirect('home');
+        }
+        flash('error', $res['error'] ?? 'Code ungültig.');
+    }
+    redirect('login');
 }
 
 if ($r === 'logout') {
@@ -129,13 +183,11 @@ function device_options(Store $store): array
 function handle_setup(Auth $auth): void
 {
     $username = param('username');
-    $pass     = param('password');
-    $pass2    = param('password2');
+    $email    = param('email');
     $errors   = [];
 
-    if (strlen($username) < 3) $errors[] = 'Benutzername muss mind. 3 Zeichen haben.';
-    if (strlen($pass) < 10)    $errors[] = 'Passwort muss mind. 10 Zeichen haben.';
-    if ($pass !== $pass2)      $errors[] = 'Passwörter stimmen nicht überein.';
+    if (strlen($username) < 3)                              $errors[] = 'Benutzername muss mind. 3 Zeichen haben.';
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL))         $errors[] = 'Bitte eine gültige E-Mail-Adresse eingeben.';
 
     if ($errors) {
         foreach ($errors as $e) flash('error', $e);
@@ -157,8 +209,8 @@ function handle_setup(Auth $auth): void
     }
     @chmod($configFile, 0600);
 
-    $auth->createUser($username, $pass);
-    flash('success', 'Einrichtung abgeschlossen. Bitte anmelden.');
+    $auth->createUser($username, $email);
+    flash('success', 'Einrichtung abgeschlossen. Melde dich jetzt mit deiner E-Mail an.');
     redirect('login');
 }
 

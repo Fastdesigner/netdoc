@@ -19,4 +19,16 @@ return [
 
     // Zeitzone für die Anzeige.
     'timezone' => 'Europe/Berlin',
+
+    // Mailversand für die passwortlose Anmeldung (Code + Magic-Link).
+    'mail' => [
+        // 'mail'  = PHP mail() (aktuell)
+        // 'smtp'  = später; dann host/port/user/pass/encryption unten ausfüllen
+        'transport' => 'mail',
+        'from'      => '',        // leer = netdoc@<Hauptdomain> wird automatisch verwendet
+        'from_name' => 'NetDoc',
+
+        // Für 'smtp' (noch nicht aktiv – Platzhalter für die spätere Umstellung):
+        // 'host' => '', 'port' => 587, 'user' => '', 'pass' => '', 'encryption' => 'tls',
+    ],
 ];
