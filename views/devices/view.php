@@ -73,7 +73,7 @@
     <h2>Zugeordnete Produkte</h2>
     <ul class="linklist">
         <?php foreach ($products as $p): ?>
-            <li><a href="<?= url('product.edit', ['id' => $p['id']]) ?>"><?= e($p['name']) ?></a></li>
+            <li><a href="<?= url('product.view', ['id' => $p['id']]) ?>"><?= e($p['name']) ?></a></li>
         <?php endforeach; ?>
     </ul>
 </section>

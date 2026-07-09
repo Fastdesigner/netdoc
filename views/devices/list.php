@@ -20,12 +20,12 @@
     <tbody>
     <?php foreach ($rows as $d): ?>
         <tr>
-            <td><a href="<?= url('device.view', ['id' => $d['id']]) ?>"><strong><?= e($d['name']) ?></strong></a></td>
-            <td><span class="tag"><?= e($d['type']) ?></span></td>
-            <td class="mono"><?= e($d['ip'] ?: $d['hostname'] ?: '–') ?></td>
-            <td><?= e($d['location'] ?: '–') ?></td>
-            <td><span class="dot <?= $d['status'] === 'active' ? 'ok' : 'off' ?>"></span><?= e($d['status']) ?></td>
-            <td class="rowactions"><a href="<?= url('device.edit', ['id' => $d['id']]) ?>">Bearbeiten</a></td>
+            <td data-label="Name"><a href="<?= url('device.view', ['id' => $d['id']]) ?>"><strong><?= e($d['name']) ?></strong></a></td>
+            <td data-label="Typ"><span class="tag"><?= e($d['type']) ?></span></td>
+            <td data-label="IP / Hostname" class="mono"><?= e($d['ip'] ?: $d['hostname'] ?: '–') ?></td>
+            <td data-label="Standort"><?= e($d['location'] ?: '–') ?></td>
+            <td data-label="Status"><span class="dot <?= $d['status'] === 'active' ? 'ok' : 'off' ?>"></span><?= e($d['status']) ?></td>
+            <td data-label="Aktion" class="rowactions"><a href="<?= url('device.edit', ['id' => $d['id']]) ?>">Bearbeiten</a></td>
         </tr>
     <?php endforeach; ?>
     </tbody>

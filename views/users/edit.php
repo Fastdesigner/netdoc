@@ -17,7 +17,7 @@ $isSelf = $u && (int) $u['id'] === (int) $me['id'];
         <label>Rolle
             <select name="role">
                 <?php foreach ($roles as $role): ?>
-                    <option value="<?= e($role) ?>" <?= ($u['role'] ?? 'user') === $role ? 'selected' : '' ?>><?= $role === 'admin' ? 'Admin (voller Zugriff + Benutzerverwaltung)' : 'Benutzer' ?></option>
+                    <option value="<?= e($role) ?>" <?= ($u['role'] ?? 'user') === $role ? 'selected' : '' ?>><?= e(\NetDoc\role_label($role)) ?><?= $role === 'systemadmin' ? ' (inkl. privater Zugänge)' : ($role === 'admin' ? ' (Benutzerverwaltung)' : '') ?></option>
                 <?php endforeach; ?>
             </select>
         </label>

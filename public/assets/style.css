@@ -163,3 +163,175 @@ textarea { resize: vertical; }
 .copy:hover { color: var(--accent); }
 
 .codeinput { font-family: monospace; font-size: 28px; letter-spacing: 8px; text-align: center; }
+
+@media (max-width: 760px) {
+    body { font-size: 14px; }
+    .topbar {
+        position: static;
+        height: auto;
+        padding: 12px;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .brand { flex: 1; }
+    .globalsearch {
+        order: 3;
+        flex: 0 0 100%;
+        max-width: none;
+    }
+    .userbox {
+        gap: 8px;
+        font-size: 13px;
+    }
+    .shell {
+        display: block;
+        min-height: auto;
+    }
+    .sidebar {
+        position: sticky;
+        top: 0;
+        z-index: 9;
+        width: 100%;
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 8px 10px;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        scrollbar-width: none;
+    }
+    .sidebar::-webkit-scrollbar { display: none; }
+    .sidebar a {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 9px 11px;
+        white-space: nowrap;
+    }
+    .sidebar .ico { width: auto; }
+    .content {
+        max-width: none;
+        padding: 14px 12px 24px;
+    }
+    .pagehead {
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .pagehead h1 { font-size: 21px; }
+    .pagehead .btn { white-space: nowrap; }
+    .card {
+        padding: 14px;
+        margin-bottom: 14px;
+        border-radius: 8px;
+    }
+    .cardhead {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+    .filterbar {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+    .filterbar .ghost { grid-column: 1 / -1; text-align: center; }
+    .formactions {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+    .formactions .btn { flex: 1 1 auto; text-align: center; }
+    .formactions .right {
+        flex-basis: 100%;
+        margin-left: 0;
+    }
+    .pwfield {
+        align-items: stretch;
+    }
+    .pwfield .linkbtn {
+        padding: 0 4px;
+        min-width: 68px;
+    }
+    .tablewrap { overflow: visible; }
+    .table,
+    .table thead,
+    .table tbody,
+    .table tr,
+    .table th,
+    .table td {
+        display: block;
+    }
+    .table thead { display: none; }
+    .table tr {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+    .table tr:last-child { border-bottom: none; }
+    .table tr:hover td { background: transparent; }
+    .table td {
+        display: grid;
+        grid-template-columns: minmax(96px, 38%) 1fr;
+        gap: 10px;
+        padding: 6px 0;
+        border-bottom: none;
+        overflow-wrap: anywhere;
+    }
+    .table td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .table td:first-child {
+        display: block;
+        padding-bottom: 10px;
+    }
+    .table td:first-child::before { display: none; }
+    .rowactions {
+        text-align: left;
+        white-space: normal;
+    }
+    .rowactions a {
+        display: inline-block;
+        margin-right: 12px;
+        padding: 4px 0;
+    }
+    .detail > div {
+        display: block;
+    }
+    .detail dd {
+        margin-top: 2px;
+        text-align: left;
+        overflow-wrap: anywhere;
+    }
+    .linklist li {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 420px) {
+    .topbar { padding: 10px; }
+    .userbox {
+        flex: 0 0 100%;
+        justify-content: space-between;
+    }
+    .pagehead {
+        display: grid;
+    }
+    .pagehead .btn {
+        width: 100%;
+        text-align: center;
+    }
+    .filterbar {
+        grid-template-columns: 1fr;
+    }
+    .table td {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+    .table td::before {
+        text-transform: none;
+        letter-spacing: 0;
+    }
+}

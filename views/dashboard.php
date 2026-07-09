@@ -36,7 +36,7 @@
             <ul class="linklist">
                 <?php foreach ($expiring as $p): ?>
                     <li>
-                        <a href="<?= url('product.edit', ['id' => $p['id']]) ?>"><?= e($p['name']) ?></a>
+                        <a href="<?= url('product.view', ['id' => $p['id']]) ?>"><?= e($p['name']) ?></a>
                         <span class="tag warn"><?= e($p['expiry_date']) ?></span>
                     </li>
                 <?php endforeach; ?>

@@ -11,7 +11,7 @@ $nav = [
     'notes'     => ['Notizen', '📝'],
     'documents' => ['Dokumente', '📎'],
 ];
-if (($u['role'] ?? '') === 'admin') {
+if (\NetDoc\can_manage_users($u)) {
     $nav['users'] = ['Benutzer', '👥'];
 }
 function nav_active(string $key, string $active): string {

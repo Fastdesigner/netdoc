@@ -1,6 +1,8 @@
-<?php /** @var array|null $cred @var array $devices @var array $categories @var string $csrf @var int $preselectDevice */
+<?php /** @var array|null $cred @var array $devices @var array $products @var array $categories @var string $csrf @var int $preselectDevice @var int $preselectProduct */
 $v = fn(string $k) => e($cred[$k] ?? '');
 $selDevice = (int) ($cred['device_id'] ?? $preselectDevice);
+$selProduct = (int) ($cred['product_id'] ?? $preselectProduct);
+$visibility = $cred['visibility'] ?? 'team';
 ?>
 <div class="pagehead">
     <h1><?= $cred ? 'Zugang bearbeiten' : 'Neuer Zugang' ?></h1>
@@ -9,6 +11,7 @@ $selDevice = (int) ($cred['device_id'] ?? $preselectDevice);
 <form class="card form" method="post" action="<?= url('cred.save') ?>" autocomplete="off">
     <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <?php if ($cred): ?><input type="hidden" name="id" value="<?= (int) $cred['id'] ?>"><?php endif; ?>
+    <?php if (param('back') === 'product'): ?><input type="hidden" name="back" value="product"><?php endif; ?>
 
     <div class="grid2">
         <label>Titel *<input type="text" name="title" value="<?= $v('title') ?>" required autofocus placeholder="z.B. Firewall Admin"></label>
@@ -25,6 +28,20 @@ $selDevice = (int) ($cred['device_id'] ?? $preselectDevice);
                 <?php foreach ($devices as $d): ?>
                     <option value="<?= (int) $d['id'] ?>" <?= $selDevice === (int) $d['id'] ? 'selected' : '' ?>><?= e($d['name']) ?></option>
                 <?php endforeach; ?>
+            </select>
+        </label>
+        <label>Produkt / Lizenz
+            <select name="product_id">
+                <option value="0">— keins —</option>
+                <?php foreach ($products as $p): ?>
+                    <option value="<?= (int) $p['id'] ?>" <?= $selProduct === (int) $p['id'] ? 'selected' : '' ?>><?= e($p['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+        </label>
+        <label>Sichtbarkeit
+            <select name="visibility">
+                <option value="team" <?= $visibility !== 'private' ? 'selected' : '' ?>>Team</option>
+                <option value="private" <?= $visibility === 'private' ? 'selected' : '' ?>>Nur für mich</option>
             </select>
         </label>
         <label>Benutzername<input type="text" name="username" value="<?= $v('username') ?>" class="mono" autocomplete="off"></label>

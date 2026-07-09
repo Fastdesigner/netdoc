@@ -12,11 +12,11 @@ $me = $GLOBALS['auth']->user();
     <tbody>
     <?php foreach ($rows as $u): ?>
         <tr>
-            <td><strong><?= e($u['username']) ?></strong><?php if ((int) $u['id'] === (int) $me['id']): ?> <span class="tag">du</span><?php endif; ?></td>
-            <td class="mono"><?= e($u['email'] ?? '') ?></td>
-            <td><span class="tag <?= ($u['role'] ?? '') === 'admin' ? 'warn' : '' ?>"><?= e($u['role'] ?? 'user') ?></span></td>
-            <td class="muted small"><?= fmt_date(isset($u['last_login']) ? (int) $u['last_login'] : null) ?></td>
-            <td class="rowactions"><a href="<?= url('user.edit', ['id' => $u['id']]) ?>">Bearbeiten</a></td>
+            <td data-label="Benutzername"><strong><?= e($u['username']) ?></strong><?php if ((int) $u['id'] === (int) $me['id']): ?> <span class="tag">du</span><?php endif; ?></td>
+            <td data-label="E-Mail" class="mono"><?= e($u['email'] ?? '') ?></td>
+            <td data-label="Rolle"><span class="tag <?= in_array($u['role'] ?? '', ['admin', 'systemadmin'], true) ? 'warn' : '' ?>"><?= e(\NetDoc\role_label($u['role'] ?? 'user')) ?></span></td>
+            <td data-label="Letzter Login" class="muted small"><?= fmt_date(isset($u['last_login']) ? (int) $u['last_login'] : null) ?></td>
+            <td data-label="Aktion" class="rowactions"><a href="<?= url('user.edit', ['id' => $u['id']]) ?>">Bearbeiten</a></td>
         </tr>
     <?php endforeach; ?>
     </tbody>

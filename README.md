@@ -9,8 +9,10 @@ verknüpfbar und durchsuchbar.
 - **Reines PHP, kein MySQL, keine DB-Erweiterung** – Daten liegen als **JSON-Dateien** im `data/`-Ordner (braucht nur `ext/json`, das in PHP immer dabei ist). Backup = Ordner kopieren.
 - **Kein Composer, kein Build** – auf jeden 08/15-Webspace hochladen, fertig.
 - Geräte · Zugänge · Produkte/Lizenzen · Notizen · Dokumente, alles miteinander verknüpfbar.
+- Zugänge können als Team-Zugang oder privat „nur für mich“ gespeichert werden.
 - **Dokumenten-Ablage** mit Datei-Upload (außerhalb des Webroots gespeichert, Download nur nach Login).
 - **Benutzerverwaltung** (Admin): weitere Personen mit eigener E-Mail anlegen, passwortlose Anmeldung.
+- Rollen: Benutzer, Admin und Systemadmin. Systemadmins können zusätzlich private Zugänge aller Benutzer einsehen.
 - Volltextsuche über alle Bereiche.
 
 ## Sicherheit

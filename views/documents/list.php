@@ -20,12 +20,12 @@
     <tbody>
     <?php foreach ($rows as $d): ?>
         <tr>
-            <td><a href="<?= url('document.download', ['id' => $d['id']]) ?>"><strong><?= e($d['title']) ?></strong></a></td>
-            <td class="muted mono"><?= e($d['filename'] ?: '–') ?></td>
-            <td><?= fmt_bytes((int) ($d['size'] ?? 0)) ?></td>
-            <td><?php if (!empty($d['device_name'])): ?><span class="tag"><?= e($d['device_name']) ?></span><?php else: ?>–<?php endif; ?></td>
-            <td class="muted small"><?= fmt_date((int) $d['created_at']) ?><?php if (!empty($d['uploaded_by'])): ?><br><?= e($d['uploaded_by']) ?><?php endif; ?></td>
-            <td class="rowactions">
+            <td data-label="Titel"><a href="<?= url('document.download', ['id' => $d['id']]) ?>"><strong><?= e($d['title']) ?></strong></a></td>
+            <td data-label="Datei" class="muted mono"><?= e($d['filename'] ?: '–') ?></td>
+            <td data-label="Größe"><?= fmt_bytes((int) ($d['size'] ?? 0)) ?></td>
+            <td data-label="Gerät"><?php if (!empty($d['device_name'])): ?><span class="tag"><?= e($d['device_name']) ?></span><?php else: ?>–<?php endif; ?></td>
+            <td data-label="Hochgeladen" class="muted small"><?= fmt_date((int) $d['created_at']) ?><?php if (!empty($d['uploaded_by'])): ?><br><?= e($d['uploaded_by']) ?><?php endif; ?></td>
+            <td data-label="Aktion" class="rowactions">
                 <a href="<?= url('document.download', ['id' => $d['id']]) ?>">Download</a>
                 <a href="<?= url('document.edit', ['id' => $d['id']]) ?>">Bearbeiten</a>
             </td>

@@ -20,12 +20,12 @@
     <tbody>
     <?php foreach ($rows as $p): ?>
         <tr>
-            <td><a href="<?= url('product.edit', ['id' => $p['id']]) ?>"><strong><?= e($p['name']) ?></strong></a></td>
-            <td><?= e($p['vendor'] ?: '–') ?></td>
-            <td><?php if ($p['category']): ?><span class="tag"><?= e($p['category']) ?></span><?php else: ?>–<?php endif; ?></td>
-            <td><?= $p['seats'] !== null ? (int) $p['seats'] : '–' ?></td>
-            <td><?= e($p['expiry_date'] ?: '–') ?></td>
-            <td class="rowactions"><a href="<?= url('product.edit', ['id' => $p['id']]) ?>">Bearbeiten</a></td>
+            <td data-label="Name"><a href="<?= url('product.view', ['id' => $p['id']]) ?>"><strong><?= e($p['name']) ?></strong></a></td>
+            <td data-label="Hersteller"><?= e($p['vendor'] ?: '–') ?></td>
+            <td data-label="Kategorie"><?php if ($p['category']): ?><span class="tag"><?= e($p['category']) ?></span><?php else: ?>–<?php endif; ?></td>
+            <td data-label="Seats"><?= $p['seats'] !== null ? (int) $p['seats'] : '–' ?></td>
+            <td data-label="Ablauf"><?= e($p['expiry_date'] ?: '–') ?></td>
+            <td data-label="Aktion" class="rowactions"><a href="<?= url('product.edit', ['id' => $p['id']]) ?>">Bearbeiten</a></td>
         </tr>
     <?php endforeach; ?>
     </tbody>

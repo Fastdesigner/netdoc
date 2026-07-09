@@ -18,7 +18,7 @@ require dirname(__DIR__) . '/src/bootstrap.php';
 // Erlaubte Werte (top-level const werden nicht hoisted -> vor dem Routing deklarieren).
 const DEVICE_TYPES     = ['server', 'switch', 'router', 'firewall', 'accesspoint', 'nas', 'printer', 'client', 'vm', 'other'];
 const CRED_CATEGORIES  = ['login', 'ssh', 'rdp', 'vpn', 'web', 'database', 'wifi', 'api', 'other'];
-const ROLES            = ['admin', 'user'];
+const ROLES            = ['systemadmin', 'admin', 'user'];
 
 // Datei-Upload: Limit und blockierte (ausführbare) Endungen.
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20 MB
@@ -131,22 +131,23 @@ $user = $auth->user();
 
 // --- 4) Routing -------------------------------------------------------------
 switch ($r) {
-    case 'home':          route_home($store); break;
+    case 'home':          route_home($store, $user); break;
 
     case 'devices':       route_device_list($store); break;
     case 'device.edit':   route_device_edit($store); break;
     case 'device.save':   route_device_save($store, $user); break;
-    case 'device.view':   route_device_view($store); break;
+    case 'device.view':   route_device_view($store, $user); break;
     case 'device.delete': route_device_delete($store, $user); break;
 
-    case 'creds':         route_cred_list($store); break;
-    case 'cred.edit':     route_cred_edit($store); break;
+    case 'creds':         route_cred_list($store, $user); break;
+    case 'cred.edit':     route_cred_edit($store, $user); break;
     case 'cred.save':     route_cred_save($store, $crypto, $user); break;
     case 'cred.reveal':   route_cred_reveal($store, $crypto, $user); break;
     case 'cred.delete':   route_cred_delete($store, $user); break;
 
     case 'products':      route_product_list($store); break;
     case 'product.edit':  route_product_edit($store); break;
+    case 'product.view':  route_product_view($store, $user); break;
     case 'product.save':  route_product_save($store, $crypto, $user); break;
     case 'product.delete':route_product_delete($store, $user); break;
 
@@ -166,7 +167,7 @@ switch ($r) {
     case 'user.save':     require_admin($user); route_user_save($store, $user); break;
     case 'user.delete':   require_admin($user); route_user_delete($store, $user); break;
 
-    case 'search':        route_search($store); break;
+    case 'search':        route_search($store, $user); break;
 
     default:
         http_response_code(404);
@@ -193,18 +194,96 @@ function device_options(Store $store): array
     return arr_sort($store->all('devices'), 'name');
 }
 
-/** Nur Admins zulassen – sonst zurück zur Übersicht. */
+function product_map(Store $store): array
+{
+    $map = [];
+    foreach ($store->all('products') as $p) {
+        $map[(int) $p['id']] = $p['name'];
+    }
+    return $map;
+}
+
+function product_options(Store $store): array
+{
+    return arr_sort($store->all('products'), 'name');
+}
+
+function user_map(Store $store): array
+{
+    $map = [];
+    foreach ($store->all('users') as $u) {
+        $map[(int) $u['id']] = $u['username'];
+    }
+    return $map;
+}
+
+function role_label(string $role): string
+{
+    return match ($role) {
+        'systemadmin' => 'Systemadmin',
+        'admin' => 'Admin',
+        default => 'Benutzer',
+    };
+}
+
+function can_manage_users(array $user): bool
+{
+    return in_array($user['role'] ?? '', ['admin', 'systemadmin'], true);
+}
+
+function can_view_credential(array $cred, array $user): bool
+{
+    if (($cred['visibility'] ?? 'team') !== 'private') {
+        return true;
+    }
+    if (($user['role'] ?? '') === 'systemadmin') {
+        return true;
+    }
+    return (int) ($cred['owner_user_id'] ?? 0) === (int) $user['id'];
+}
+
+function credential_rows(Store $store, array $user): array
+{
+    return array_values(array_filter($store->all('credentials'),
+        static fn(array $c): bool => can_view_credential($c, $user)));
+}
+
+function require_credential(Store $store, int $id, array $user): array
+{
+    $cred = $id ? $store->find('credentials', $id) : null;
+    if (!$cred || !can_view_credential($cred, $user)) {
+        flash('error', 'Zugang nicht gefunden oder nicht freigegeben.');
+        redirect('creds');
+    }
+    return $cred;
+}
+
+function enrich_credentials(Store $store, array $rows): array
+{
+    $devices = device_map($store);
+    $products = product_map($store);
+    $users = user_map($store);
+    foreach ($rows as &$c) {
+        $c['device_name'] = $devices[(int) ($c['device_id'] ?? 0)] ?? null;
+        $c['product_name'] = $products[(int) ($c['product_id'] ?? 0)] ?? null;
+        $c['owner_name'] = $users[(int) ($c['owner_user_id'] ?? 0)] ?? null;
+    }
+    unset($c);
+    return $rows;
+}
+
+/** Admins/Systemadmins zulassen – sonst zurück zur Übersicht. */
 function require_admin(array $user): void
 {
-    if (($user['role'] ?? '') !== 'admin') {
+    if (!can_manage_users($user)) {
         flash('error', 'Dafür fehlen dir die Rechte.');
         redirect('home');
     }
 }
 
-function admin_count(Store $store): int
+function management_user_count(Store $store): int
 {
-    return count(array_filter($store->all('users'), static fn($u) => ($u['role'] ?? '') === 'admin'));
+    return count(array_filter($store->all('users'), static fn($u) => can_manage_users($u)));
 }
 
 /** Upload-Verzeichnis (außerhalb des Webroots, unter data/). */
@@ -267,11 +346,11 @@ function render_setup(Auth $auth, bool $isInstalled): void
 //  Dashboard
 // ============================================================================
 
-function route_home(Store $store): void
+function route_home(Store $store, array $user): void
 {
     $counts = [
         'devices'  => $store->count('devices'),
-        'creds'    => $store->count('credentials'),
+        'creds'    => count(credential_rows($store, $user)),
         'products' => $store->count('products'),
         'notes'    => $store->count('notes'),
     ];
@@ -337,7 +416,7 @@ function route_device_save(Store $store, array $user): void
     redirect('device.view', ['id' => $id]);
 }
 
-function route_device_view(Store $store): void
+function route_device_view(Store $store, array $user): void
 {
     $id  = (int) param('id', '0');
     $dev = $store->find('devices', $id);
@@ -349,7 +428,7 @@ function route_device_view(Store $store): void
     $byDevice = static fn(array $rows) => array_values(array_filter($rows,
         static fn($x) => (int) ($x['device_id'] ?? 0) === $id));
 
-    $creds     = arr_sort($byDevice($store->all('credentials')), 'title');
+    $creds     = enrich_credentials($store, arr_sort($byDevice(credential_rows($store, $user)), 'title'));
     $notes     = arr_sort($byDevice($store->all('notes')), 'updated_at', true);
     $products  = arr_sort($byDevice($store->all('products')), 'name');
     $documents = arr_sort($byDevice($store->all('documents')), 'created_at', true);
@@ -373,27 +452,23 @@ function route_device_delete(Store $store, array $user): void
 //  Zugänge / Verbindungsdaten (verschlüsselt)
 // ============================================================================
 
-function route_cred_list(Store $store): void
+function route_cred_list(Store $store, array $user): void
 {
     $q     = param('q');
-    $map   = device_map($store);
-    $rows  = arr_search($store->all('credentials'), ['title', 'username', 'url'], $q);
-    foreach ($rows as &$c) {
-        $c['device_name'] = $map[(int) ($c['device_id'] ?? 0)] ?? null;
-    }
-    unset($c);
+    $rows  = enrich_credentials($store, arr_search(credential_rows($store, $user), ['title', 'username', 'url'], $q));
     $rows = arr_sort($rows, 'title');
     render('credentials/list', 'Zugänge & Verbindungen', ['rows' => $rows, 'q' => $q]);
 }
 
-function route_cred_edit(Store $store): void
+function route_cred_edit(Store $store, array $user): void
 {
     $id   = (int) param('id', '0');
-    $cred = $id ? $store->find('credentials', $id) : null;
+    $cred = $id ? require_credential($store, $id, $user) : null;
     render('credentials/edit', $id ? 'Zugang bearbeiten' : 'Neuer Zugang', [
-        'cred' => $cred, 'devices' => device_options($store),
+        'cred' => $cred, 'devices' => device_options($store), 'products' => product_options($store),
         'categories' => CRED_CATEGORIES, 'csrf' => $GLOBALS['csrf'],
         'preselectDevice' => (int) param('device_id', '0'),
+        'preselectProduct' => (int) param('product_id', '0'),
     ]);
 }
 
@@ -401,15 +476,26 @@ function route_cred_save(Store $store, ?Crypto $crypto, array $user): void
 {
     $id    = (int) param('id', '0');
     $title = param('title');
+    $existing = null;
     if ($title === '') {
         flash('error', 'Titel ist Pflicht.');
-        redirect('cred.edit', $id ? ['id' => $id] : []);
+        $params = $id ? ['id' => $id] : [];
+        if (!$id && (int) param('device_id', '0')) {
+            $params['device_id'] = (int) param('device_id', '0');
+        }
+        if (!$id && (int) param('product_id', '0')) {
+            $params['product_id'] = (int) param('product_id', '0');
+        }
+        if (!$id && param('back') === 'product') {
+            $params['back'] = 'product';
+        }
+        redirect('cred.edit', $params);
     }
 
     // Passwort nur neu verschlüsseln, wenn im Formular ein neues eingegeben wurde.
     $secretInput = param('secret');
     if ($id) {
-        $existing  = $store->find('credentials', $id);
+        $existing  = require_credential($store, $id, $user);
         $secretEnc = $existing['secret_enc'] ?? null;
         if ($secretInput !== '') {
             $secretEnc = $crypto->encrypt($secretInput);
@@ -418,14 +504,23 @@ function route_cred_save(Store $store, ?Crypto $crypto, array $user): void
         $secretEnc = $secretInput !== '' ? $crypto->encrypt($secretInput) : null;
     }
 
+    $visibility = param('visibility') === 'private' ? 'private' : 'team';
+    $ownerUserId = $visibility === 'private'
+        ? (int) ($existing['owner_user_id'] ?? 0) ?: (int) $user['id']
+        : null;
+    $deviceId = (int) param('device_id', '0') ?: null;
+    $productId = (int) param('product_id', '0') ?: null;
     $row = [
-        'device_id'  => (int) param('device_id', '0') ?: null,
+        'device_id'  => $deviceId,
+        'product_id' => $productId,
         'title'      => $title,
         'category'   => in_array(param('category'), CRED_CATEGORIES, true) ? param('category') : 'other',
         'username'   => param_null('username'),
         'secret_enc' => $secretEnc,
         'url'        => param_null('url'),
         'port'       => param_null('port'),
+        'visibility' => $visibility,
+        'owner_user_id' => $ownerUserId,
         'notes'      => param_null('notes'),
     ];
 
@@ -438,6 +533,9 @@ function route_cred_save(Store $store, ?Crypto $crypto, array $user): void
         audit($store, $user, 'create', 'credential', $id);
         flash('success', 'Zugang angelegt.');
     }
+    if (param('back') === 'product' && $productId) {
+        redirect('product.view', ['id' => $productId]);
+    }
     redirect('creds');
 }
 
@@ -446,8 +544,8 @@ function route_cred_reveal(Store $store, ?Crypto $crypto, array $user): void
 {
     header('Content-Type: application/json');
     $id   = (int) param('id', '0');
-    $cred = $store->find('credentials', $id);
-    if (!$cred) {
+    $cred = $id ? $store->find('credentials', $id) : null;
+    if (!$cred || !can_view_credential($cred, $user)) {
         http_response_code(404);
         echo json_encode(['error' => 'not found']);
         return;
@@ -459,6 +557,7 @@ function route_cred_reveal(Store $store, ?Crypto $crypto, array $user): void
 function route_cred_delete(Store $store, array $user): void
 {
     $id = (int) param('id', '0');
+    require_credential($store, $id, $user);
     $store->delete('credentials', $id);
     audit($store, $user, 'delete', 'credential', $id);
     flash('success', 'Zugang gelöscht.');
@@ -483,6 +582,22 @@ function route_product_edit(Store $store): void
     $p  = $id ? $store->find('products', $id) : null;
     render('products/edit', $id ? 'Produkt bearbeiten' : 'Neues Produkt',
         ['p' => $p, 'devices' => device_options($store), 'csrf' => $GLOBALS['csrf']]);
+}
+
+function route_product_view(Store $store, array $user): void
+{
+    $id = (int) param('id', '0');
+    $p  = $store->find('products', $id);
+    if (!$p) {
+        http_response_code(404);
+        render('error', 'Nicht gefunden', ['message' => 'Produkt existiert nicht.']);
+        return;
+    }
+    $devices = device_map($store);
+    $p['device_name'] = $devices[(int) ($p['device_id'] ?? 0)] ?? null;
+    $creds = enrich_credentials($store, arr_sort(array_values(array_filter(credential_rows($store, $user),
+        static fn(array $c): bool => (int) ($c['product_id'] ?? 0) === $id)), 'title'));
+    render('products/view', $p['name'], compact('p', 'creds'));
 }
 
 function route_product_save(Store $store, ?Crypto $crypto, array $user): void
@@ -528,13 +643,14 @@ function route_product_save(Store $store, ?Crypto $crypto, array $user): void
         audit($store, $user, 'create', 'product', $id);
         flash('success', 'Produkt angelegt.');
     }
-    redirect('products');
+    redirect('product.view', ['id' => $id]);
 }
 
 function route_product_delete(Store $store, array $user): void
 {
     $id = (int) param('id', '0');
     $store->delete('products', $id);
+    $store->nullifyReferences('credentials', 'product_id', $id);
     audit($store, $user, 'delete', 'product', $id);
     flash('success', 'Produkt gelöscht.');
     redirect('products');
@@ -604,19 +720,15 @@ function route_note_delete(Store $store, array $user): void
 //  Globale Suche
 // ============================================================================
 
-function route_search(Store $store): void
+function route_search(Store $store, array $user): void
 {
     $q = param('q');
     $results = ['devices' => [], 'creds' => [], 'products' => [], 'notes' => []];
     if ($q !== '') {
-        $map = device_map($store);
-
         $results['devices'] = array_slice(
             arr_sort(arr_search($store->all('devices'), ['name', 'ip', 'hostname', 'notes'], $q), 'name'), 0, 25);
 
-        $creds = arr_search($store->all('credentials'), ['title', 'username', 'url'], $q);
-        foreach ($creds as &$c) { $c['device_name'] = $map[(int) ($c['device_id'] ?? 0)] ?? null; }
-        unset($c);
+        $creds = enrich_credentials($store, arr_search(credential_rows($store, $user), ['title', 'username', 'url'], $q));
         $results['creds'] = array_slice(arr_sort($creds, 'title'), 0, 25);
 
         $results['products'] = array_slice(
@@ -811,11 +923,11 @@ function route_user_save(Store $store, array $current): void
     $dupe = $store->findBy('users', 'email', $email);
     if ($dupe && (int) $dupe['id'] !== $id)          $errors[] = 'Diese E-Mail wird bereits verwendet.';
 
-    // Letzten Admin nicht herabstufen.
-    if ($id && $role !== 'admin') {
+    // Letzten Admin/Systemadmin nicht herabstufen.
+    if ($id && !can_manage_users(['role' => $role])) {
         $existing = $store->find('users', $id);
-        if ($existing && ($existing['role'] ?? '') === 'admin' && admin_count($store) <= 1) {
-            $errors[] = 'Der letzte Admin kann nicht herabgestuft werden.';
+        if ($existing && can_manage_users($existing) && management_user_count($store) <= 1) {
+            $errors[] = 'Der letzte Admin/Systemadmin kann nicht herabgestuft werden.';
         }
     }
 
@@ -850,8 +962,8 @@ function route_user_delete(Store $store, array $current): void
         redirect('users');
     }
     $target = $store->find('users', $id);
-    if ($target && ($target['role'] ?? '') === 'admin' && admin_count($store) <= 1) {
-        flash('error', 'Der letzte Admin kann nicht gelöscht werden.');
+    if ($target && can_manage_users($target) && management_user_count($store) <= 1) {
+        flash('error', 'Der letzte Admin/Systemadmin kann nicht gelöscht werden.');
         redirect('users');
     }
     $store->delete('users', $id);
