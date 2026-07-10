@@ -1,6 +1,7 @@
 <?php /** @var array $creds */ ?>
 <div class="table-wrap">
 <table class="data-table data-table--credentials">
+    <colgroup><col><col><col><col><col><col><col></colgroup>
     <thead><tr><th>Titel</th><th>Kategorie</th><th>Benutzer</th><th>Passwort</th><th>Adresse</th><th>Zuordnung</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($creds as $c): ?>
@@ -19,8 +20,10 @@
             </td>
             <td data-label="Passwort" class="secret-cell">
                 <?php if ($c['secret_enc']): ?>
-                    <code class="secret" data-id="<?= (int) $c['id'] ?>">••••••••</code>
-                    <?= ui('button', ['label' => 'Anzeigen', 'icon' => 'eye', 'variant' => 'quiet', 'size' => 'small', 'class' => 'reveal', 'attributes' => ['data-id' => (int) $c['id']]]) ?>
+                    <span class="secret-value">
+                        <code class="secret" data-id="<?= (int) $c['id'] ?>">••••••••</code>
+                        <?= ui('button', ['label' => 'Anzeigen', 'icon' => 'eye', 'variant' => 'quiet', 'size' => 'small', 'class' => 'reveal', 'attributes' => ['data-id' => (int) $c['id']]]) ?>
+                    </span>
                 <?php else: ?><span class="muted">–</span><?php endif; ?>
             </td>
             <td data-label="Adresse"><?php if ($c['url']): ?>
@@ -31,7 +34,7 @@
                 <?php if (!empty($c['product_name'])): ?><span class="badge"><?= ui('icon', ['name' => 'package']) ?><?= e($c['product_name']) ?></span><?php endif; ?>
                 <?php if (empty($c['device_name']) && empty($c['product_name'])): ?>–<?php endif; ?>
             </td>
-            <td data-label="Aktion" class="row-actions"><?= ui('button', ['label' => 'Bearbeiten', 'icon' => 'pencil', 'href' => url('cred.edit', ['id' => $c['id']]), 'variant' => 'quiet', 'size' => 'small']) ?></td>
+            <td data-label="Aktion" class="row-actions"><?= ui('button', ['label' => 'Zugang bearbeiten', 'icon' => 'pencil', 'href' => url('cred.edit', ['id' => $c['id']]), 'variant' => 'quiet', 'size' => 'small', 'class' => 'button--icon-only', 'attributes' => ['title' => 'Zugang bearbeiten', 'aria-label' => 'Zugang bearbeiten']]) ?></td>
         </tr>
     <?php endforeach; ?>
     </tbody>

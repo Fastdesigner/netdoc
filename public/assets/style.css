@@ -19,7 +19,6 @@
     --danger-soft: #3c1d20;
     --shadow: 0 18px 50px rgba(0, 0, 0, .28);
     --sidebar-width: 240px;
-    --content-width: 1240px;
     font-family: system-ui, sans-serif;
     letter-spacing: 0;
 }
@@ -224,6 +223,7 @@ code {
 
 .workspace {
     min-width: 0;
+    overflow-x: clip;
 }
 
 .topbar {
@@ -279,9 +279,8 @@ code {
 }
 
 .content {
-    width: min(100%, var(--content-width));
-    margin: 0 auto;
-    padding: 34px 34px 56px;
+    width: 100%;
+    padding: 34px clamp(24px, 3vw, 48px) 56px;
 }
 
 .notifications {
@@ -585,6 +584,11 @@ code {
 
 .panel {
     overflow: hidden;
+}
+
+.panel,
+.data-panel {
+    container-type: inline-size;
 }
 
 .section-header {
@@ -1018,6 +1022,39 @@ input[type="file"]::file-selector-button {
     border-collapse: collapse;
 }
 
+.data-table--credentials {
+    min-width: 1080px;
+    table-layout: fixed;
+}
+
+.data-table--credentials col:nth-child(1) {
+    width: 15%;
+}
+
+.data-table--credentials col:nth-child(2) {
+    width: 9%;
+}
+
+.data-table--credentials col:nth-child(3) {
+    width: 20%;
+}
+
+.data-table--credentials col:nth-child(4) {
+    width: 17%;
+}
+
+.data-table--credentials col:nth-child(5) {
+    width: 19%;
+}
+
+.data-table--credentials col:nth-child(6) {
+    width: 15%;
+}
+
+.data-table--credentials col:nth-child(7) {
+    width: 5%;
+}
+
 .data-table th {
     padding: 12px 15px;
     border-bottom: 1px solid var(--border);
@@ -1115,11 +1152,31 @@ input[type="file"]::file-selector-button {
 }
 
 .copy-field,
-.secret-cell,
+.secret-value,
 .assignment-cell {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.data-table--credentials td {
+    overflow: hidden;
+}
+
+.data-table--credentials .copy-field,
+.data-table--credentials .address-value {
+    width: 100%;
+    min-width: 0;
+}
+
+.data-table--credentials .copy-field code,
+.data-table--credentials .data-address {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .assignment-cell {
@@ -1247,9 +1304,121 @@ input[type="file"]::file-selector-button {
     .metric-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+}
+
+@container (max-width: 900px) {
+    .table-wrap {
+        overflow: hidden;
+    }
 
     .data-table--credentials {
-        min-width: 980px;
+        min-width: 0;
+    }
+
+    .data-table,
+    .data-table tbody,
+    .data-table tr,
+    .data-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .data-table thead,
+    .data-table colgroup {
+        display: none;
+    }
+
+    .data-table tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 24px;
+        padding: 14px 15px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .data-table tr:last-child {
+        border-bottom: 0;
+    }
+
+    .data-table td {
+        display: grid;
+        grid-template-columns: minmax(90px, 32%) minmax(0, 1fr);
+        gap: 12px;
+        padding: 6px 0;
+        border: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .data-table td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .data-table td.data-table__primary {
+        display: block;
+        grid-column: 1 / -1;
+        padding: 0 0 10px;
+        font-size: 16px;
+    }
+
+    .data-table td.data-table__primary::before {
+        display: none;
+    }
+
+    .row-actions {
+        display: flex !important;
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+        padding-top: 10px !important;
+        border-top: 1px solid var(--border) !important;
+        text-align: left;
+        white-space: normal;
+    }
+
+    .row-actions::before {
+        display: none;
+    }
+
+    .copy-field,
+    .secret-value,
+    .assignment-cell {
+        min-width: 0;
+    }
+
+    .data-table td > .badge,
+    .assignment-cell > .badge {
+        justify-self: start;
+    }
+
+    .secret-value .reveal {
+        width: 36px;
+        padding-inline: 8px;
+    }
+
+    .secret-value .reveal .button__label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+    }
+
+    .data-address {
+        max-width: 100%;
+    }
+}
+
+@container (max-width: 720px) {
+    .data-table tr {
+        grid-template-columns: minmax(100px, 34%) minmax(0, 1fr);
+        column-gap: 0;
+    }
+
+    .data-table td {
+        grid-template-columns: subgrid;
+        grid-column: 1 / -1;
     }
 }
 
@@ -1373,87 +1542,6 @@ input[type="file"]::file-selector-button {
         grid-template-columns: 1fr;
     }
 
-    .data-panel,
-    .panel .table-wrap {
-        overflow: hidden;
-    }
-
-    .data-table--credentials {
-        min-width: 0;
-    }
-
-    .data-table,
-    .data-table tbody,
-    .data-table tr,
-    .data-table td {
-        display: block;
-        width: 100%;
-    }
-
-    .data-table thead {
-        display: none;
-    }
-
-    .data-table tr {
-        display: grid;
-        grid-template-columns: minmax(100px, 34%) minmax(0, 1fr);
-        padding: 14px 15px;
-        border-bottom: 1px solid var(--border);
-    }
-
-    .data-table tr:last-child {
-        border-bottom: 0;
-    }
-
-    .data-table td {
-        display: grid;
-        grid-template-columns: subgrid;
-        grid-column: 1 / -1;
-        gap: 12px;
-        padding: 6px 0;
-        border: 0;
-        overflow-wrap: anywhere;
-    }
-
-    .data-table td::before {
-        content: attr(data-label);
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    .data-table td.data-table__primary {
-        display: block;
-        padding: 0 0 10px;
-        font-size: 16px;
-    }
-
-    .data-table td.data-table__primary::before {
-        display: none;
-    }
-
-    .row-actions {
-        display: flex !important;
-        justify-content: flex-end;
-        padding-top: 10px !important;
-        border-top: 1px solid var(--border) !important;
-        text-align: left;
-        white-space: normal;
-    }
-
-    .row-actions::before {
-        display: none;
-    }
-
-    .copy-field,
-    .secret-cell,
-    .assignment-cell {
-        min-width: 0;
-    }
-
-    .data-address {
-        max-width: 100%;
-    }
 }
 
 @media (max-width: 620px) {
