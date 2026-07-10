@@ -1,6 +1,8 @@
 <?php /** @var string $message */ ?>
-<div class="pagehead"><h1>Hoppla</h1></div>
-<div class="card">
-    <p><?= e($message) ?></p>
-    <a class="btn" href="<?= url('home') ?>">Zur Übersicht</a>
-</div>
+<?= ui('page-header', ['title' => 'Das hat nicht geklappt', 'description' => $message]) ?>
+<?= ui('empty-state', [
+    'icon' => 'alert-circle',
+    'title' => 'Seite nicht verfügbar',
+    'text' => 'Kehre zur Übersicht zurück und versuche es von dort erneut.',
+    'action' => ['label' => 'Zur Übersicht', 'icon' => 'arrow-left', 'href' => url('home')],
+]) ?>

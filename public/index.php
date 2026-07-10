@@ -225,6 +225,48 @@ function role_label(string $role): string
     };
 }
 
+function device_type_label(string $type): string
+{
+    return match ($type) {
+        'server' => 'Server',
+        'switch' => 'Switch',
+        'router' => 'Router',
+        'firewall' => 'Firewall',
+        'accesspoint' => 'Access Point',
+        'nas' => 'Netzwerkspeicher',
+        'printer' => 'Drucker',
+        'client' => 'Arbeitsplatz',
+        'vm' => 'Virtuelle Maschine',
+        default => 'Sonstiges',
+    };
+}
+
+function device_status_label(string $status): string
+{
+    return match ($status) {
+        'active' => 'Aktiv',
+        'inactive' => 'Inaktiv',
+        'maintenance' => 'In Wartung',
+        'retired' => 'Ausgemustert',
+        default => 'Unbekannt',
+    };
+}
+
+function credential_category_label(string $category): string
+{
+    return match ($category) {
+        'login' => 'Anmeldung',
+        'ssh' => 'SSH',
+        'rdp' => 'Remotedesktop',
+        'vpn' => 'VPN',
+        'web' => 'Webzugang',
+        'database' => 'Datenbank',
+        'wifi' => 'WLAN',
+        'api' => 'API',
+        default => 'Sonstiges',
+    };
+}
+
 function can_manage_users(array $user): bool
 {
     return in_array($user['role'] ?? '', ['admin', 'systemadmin'], true);

@@ -1,12 +1,22 @@
 <?php /** @var string $csrf @var bool $configExists */ ?>
-<div class="card authcard">
-    <h1 class="logo">Net<span>Doc</span></h1>
-    <p class="muted">Erstinstallation – Administrator anlegen</p>
+<section class="auth-card auth-card--wide">
+    <header class="auth-card__header">
+        <div class="logo">Net<span>Doc</span></div>
+        <span class="auth-card__mark"><?= ui('icon', ['name' => 'shield-check']) ?></span>
+    </header>
+    <div class="auth-card__intro">
+        <h1>NetDoc einrichten</h1>
+        <p>Lege dein Administratorkonto an. Danach kannst du Geräte, Zugänge und Dokumente erfassen.</p>
+    </div>
 
     <?php if (!is_writable(CONFIG)): ?>
-        <div class="flash error">
+        <div class="inline-alert inline-alert--error">
+            <?= ui('icon', ['name' => 'alert-circle']) ?>
+            <div>
+            <strong>Konfiguration nicht beschreibbar</strong>
             Verzeichnis <code>config/</code> ist nicht beschreibbar. Bitte Schreibrechte setzen
             (z.&nbsp;B. <code>chmod 750 config</code>), sonst kann der Krypto-Schlüssel nicht gespeichert werden.
+            </div>
         </div>
     <?php endif; ?>
 
@@ -15,10 +25,10 @@
         <label>Benutzername
             <input type="text" name="username" required autofocus minlength="3">
         </label>
-        <label>E-Mail-Adresse <small class="muted">(für die Anmeldung per Code)</small>
+        <label>E-Mail-Adresse <small>(für deine Anmeldecodes)</small>
             <input type="email" name="email" required placeholder="du@example.com">
         </label>
-        <button type="submit" class="btn primary block">Einrichten &amp; loslegen</button>
+        <?= ui('button', ['label' => 'Einrichten und starten', 'icon' => 'check', 'variant' => 'primary', 'type' => 'submit', 'class' => 'button--block']) ?>
     </form>
-    <p class="muted small">Die Anmeldung erfolgt passwortlos: Du bekommst bei jedem Login einen 6-stelligen Code (oder Magic-Link) per E-Mail. Beim Einrichten wird automatisch ein Verschlüsselungs-Schlüssel in <code>config/config.php</code> erzeugt.</p>
-</div>
+    <p class="auth-card__hint">NetDoc schützt deine gespeicherten Geheimnisse automatisch mit einem eigenen Verschlüsselungsschlüssel.</p>
+</section>

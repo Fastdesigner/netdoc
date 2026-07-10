@@ -89,6 +89,15 @@ function fmt_date(?int $ts): string
     return $ts ? date('d.m.Y H:i', $ts) : '–';
 }
 
+function fmt_day(?string $date): string
+{
+    if (!$date) {
+        return '–';
+    }
+    $timestamp = strtotime($date);
+    return $timestamp ? date('d.m.Y', $timestamp) : $date;
+}
+
 function fmt_bytes(int $bytes): string
 {
     $units = ['B', 'KB', 'MB', 'GB'];
@@ -132,11 +141,11 @@ function arr_sort(array $rows, string $field, bool $desc = false): array
 }
 
 /** View rendern und als String zurückgeben. */
-function view(string $name, array $data = []): string
+function view(string $template, array $data = []): string
 {
     extract($data, EXTR_SKIP);
     ob_start();
-    require VIEWS . '/' . $name . '.php';
+    require VIEWS . '/' . $template . '.php';
     return (string) ob_get_clean();
 }
 
@@ -145,4 +154,24 @@ function render(string $name, string $title, array $data = []): void
 {
     $content = view($name, $data);
     echo view('layout', ['content' => $content, 'title' => $title] + $data);
+}
+
+function ui(string $component, array $data = []): string
+{
+    return view('ui/' . $component, $data);
+}
+
+function ui_attrs(array $attributes): string
+{
+    $html = '';
+    foreach ($attributes as $name => $value) {
+        if ($value === false || $value === null) {
+            continue;
+        }
+        $html .= ' ' . e((string) $name);
+        if ($value !== true) {
+            $html .= '="' . e((string) $value) . '"';
+        }
+    }
+    return $html;
 }

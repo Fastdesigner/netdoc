@@ -1,60 +1,83 @@
 'use strict';
 
-/* Löschen etc. bestätigen. */
-document.addEventListener('click', function (ev) {
-    const el = ev.target.closest('[data-confirm]');
-    if (el && !window.confirm(el.getAttribute('data-confirm'))) {
-        ev.preventDefault();
-    }
+function setButtonLabel(button, label) {
+    const target = button.querySelector('.button__label');
+    if (target) target.textContent = label;
+}
+
+document.addEventListener('click', function (event) {
+    const target = event.target.closest('[data-confirm]');
+    if (target && !window.confirm(target.getAttribute('data-confirm'))) event.preventDefault();
 });
 
-/* Passwortfeld im Formular ein-/ausblenden. */
-document.addEventListener('click', function (ev) {
-    const btn = ev.target.closest('.togglepw');
-    if (!btn) return;
-    const input = btn.parentElement.querySelector('input');
+document.addEventListener('click', function (event) {
+    const button = event.target.closest('.notification__dismiss');
+    if (button) button.closest('.notification').remove();
+});
+
+document.addEventListener('click', function (event) {
+    const button = event.target.closest('.toggle-password');
+    if (!button) return;
+    const input = button.parentElement.querySelector('input');
     if (!input) return;
     const show = input.type === 'password';
     input.type = show ? 'text' : 'password';
-    btn.textContent = show ? 'verbergen' : 'zeigen';
+    button.classList.toggle('is-active', show);
+    button.setAttribute('aria-pressed', show ? 'true' : 'false');
+    setButtonLabel(button, show ? 'Verbergen' : 'Anzeigen');
 });
 
-/* Gespeichertes Passwort per XHR entschlüsseln und anzeigen. */
-document.addEventListener('click', async function (ev) {
-    const btn = ev.target.closest('.reveal');
-    if (!btn) return;
-    const id = btn.getAttribute('data-id');
+document.addEventListener('click', async function (event) {
+    const button = event.target.closest('.reveal');
+    if (!button) return;
+    const id = button.getAttribute('data-id');
     const code = document.querySelector('.secret[data-id="' + id + '"]');
     if (!code) return;
 
     if (code.dataset.shown === '1') {
         code.textContent = '••••••••';
         code.dataset.shown = '0';
-        btn.textContent = 'anzeigen';
+        button.classList.remove('is-active');
+        setButtonLabel(button, 'Anzeigen');
         return;
     }
-    btn.textContent = '…';
+
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    setButtonLabel(button, 'Lädt');
     try {
-        const res = await fetch('index.php?r=cred.reveal&id=' + encodeURIComponent(id), {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        const response = await fetch('index.php?r=cred.reveal&id=' + encodeURIComponent(id), {
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
         });
-        const data = await res.json();
+        const data = await response.json();
         code.textContent = data.secret || '(leer)';
         code.dataset.shown = '1';
-        btn.textContent = 'verbergen';
-    } catch (e) {
-        btn.textContent = 'Fehler';
+        button.classList.add('is-active');
+        setButtonLabel(button, 'Verbergen');
+    } catch (error) {
+        setButtonLabel(button, 'Fehler');
+    } finally {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
     }
 });
 
-/* Klick auf einen Wert kopiert ihn in die Zwischenablage. */
-document.addEventListener('click', function (ev) {
-    const el = ev.target.closest('.copy, .secret[data-shown="1"]');
-    if (!el || !navigator.clipboard) return;
-    const val = el.getAttribute('data-copy') || el.textContent;
-    navigator.clipboard.writeText(val).then(function () {
-        const old = el.style.color;
-        el.style.color = 'var(--ok)';
-        setTimeout(function () { el.style.color = old; }, 400);
+document.addEventListener('click', function (event) {
+    const target = event.target.closest('.copy-action, .secret[data-shown="1"]');
+    if (!target || !navigator.clipboard) return;
+    const value = target.getAttribute('data-copy') || target.textContent;
+    navigator.clipboard.writeText(value).then(function () {
+        target.classList.add('is-success');
+        if (target.classList.contains('copy-action')) setButtonLabel(target, 'Kopiert');
+        setTimeout(function () {
+            target.classList.remove('is-success');
+            if (target.classList.contains('copy-action')) setButtonLabel(target, 'Benutzername kopieren');
+        }, 1200);
+    });
+});
+
+document.addEventListener('click', function (event) {
+    document.querySelectorAll('.mobile-nav[open]').forEach(function (menu) {
+        if (!menu.contains(event.target)) menu.removeAttribute('open');
     });
 });

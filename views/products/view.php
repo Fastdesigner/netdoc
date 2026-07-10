@@ -1,35 +1,33 @@
 <?php /** @var array $p @var array $creds */ ?>
-<div class="pagehead">
-    <h1><?= e($p['name']) ?></h1>
-    <a class="btn" href="<?= url('product.edit', ['id' => $p['id']]) ?>">Bearbeiten</a>
-</div>
+<?= ui('page-header', [
+    'title' => $p['name'],
+    'description' => $p['vendor'] ?: 'Produktdetails',
+    'badge' => $p['category'] ?: null,
+    'actions' => [['label' => 'Bearbeiten', 'icon' => 'pencil', 'href' => url('product.edit', ['id' => $p['id']])]],
+]) ?>
 
-<div class="card">
-    <dl class="detail">
-        <div><dt>Hersteller</dt><dd><?= e($p['vendor'] ?: '–') ?></dd></div>
-        <div><dt>Kategorie</dt><dd><?= e($p['category'] ?: '–') ?></dd></div>
-        <div><dt>Seats / Anzahl</dt><dd><?= $p['seats'] !== null ? (int) $p['seats'] : '–' ?></dd></div>
-        <div><dt>Zugeordnetes Gerät</dt><dd><?= e($p['device_name'] ?: '–') ?></dd></div>
-        <div><dt>Kaufdatum</dt><dd><?= e($p['purchase_date'] ?: '–') ?></dd></div>
-        <div><dt>Ablaufdatum</dt><dd><?= e($p['expiry_date'] ?: '–') ?></dd></div>
-        <div><dt>Kosten</dt><dd><?= e($p['cost'] ?: '–') ?></dd></div>
-        <div><dt>Lieferant</dt><dd><?= e($p['supplier'] ?: '–') ?></dd></div>
+<section class="panel detail-panel">
+    <?= ui('section-header', ['title' => 'Produktinformationen', 'description' => 'Vertrag, Laufzeit und Zuordnung']) ?>
+    <dl class="detail-grid">
+        <div><dt>Hersteller</dt><dd><?= e($p['vendor'] ?: 'Nicht angegeben') ?></dd></div>
+        <div><dt>Kategorie</dt><dd><?= e($p['category'] ?: 'Nicht angegeben') ?></dd></div>
+        <div><dt>Anzahl</dt><dd><?= $p['seats'] !== null ? (int) $p['seats'] : 'Nicht angegeben' ?></dd></div>
+        <div><dt>Zugeordnetes Gerät</dt><dd><?= e($p['device_name'] ?: 'Nicht zugeordnet') ?></dd></div>
+        <div><dt>Kaufdatum</dt><dd><?= e(fmt_day($p['purchase_date'])) ?></dd></div>
+        <div><dt>Ablaufdatum</dt><dd><?= e(fmt_day($p['expiry_date'])) ?></dd></div>
+        <div><dt>Kosten</dt><dd><?= e($p['cost'] ?: 'Nicht angegeben') ?></dd></div>
+        <div><dt>Lieferant</dt><dd><?= e($p['supplier'] ?: 'Nicht angegeben') ?></dd></div>
     </dl>
-    <?php if ($p['notes']): ?>
-        <div class="notesblock"><?= nl2br(e($p['notes'])) ?></div>
-    <?php endif; ?>
-</div>
+    <?php if ($p['notes']): ?><div class="detail-note"><strong>Hinweis</strong><p><?= nl2br(e($p['notes'])) ?></p></div><?php endif; ?>
+</section>
 
-<section class="card">
-    <div class="cardhead">
-        <h2>Zugänge</h2>
-        <a class="btn small" href="<?= url('cred.edit', ['product_id' => $p['id'], 'back' => 'product']) ?>">+ Zugang</a>
-    </div>
+<section class="panel">
+    <?= ui('section-header', ['title' => 'Zugänge', 'description' => 'Anmeldedaten für dieses Produkt', 'action' => ['label' => 'Zugang hinzufügen', 'icon' => 'plus', 'href' => url('cred.edit', ['product_id' => $p['id'], 'back' => 'product']), 'size' => 'small']]) ?>
     <?php if (!$creds): ?>
-        <p class="muted">Keine Zugänge hinterlegt.</p>
+        <?= ui('empty-state', ['title' => 'Keine Zugänge hinterlegt', 'text' => 'Hier erscheinen zugeordnete Anmeldedaten.', 'icon' => 'key-round', 'compact' => true]) ?>
     <?php else: ?>
         <?php require VIEWS . '/credentials/_table.php'; ?>
     <?php endif; ?>
 </section>
 
-<p><a class="btn ghost" href="<?= url('products') ?>">← Zurück zur Liste</a></p>
+<div class="page-footer-actions"><?= ui('button', ['label' => 'Zurück zu Produkten', 'icon' => 'arrow-left', 'href' => url('products'), 'variant' => 'quiet']) ?></div>

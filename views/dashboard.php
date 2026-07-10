@@ -1,43 +1,63 @@
 <?php /** @var array $counts @var array $recent @var array $expiring */ ?>
-<div class="pagehead">
-    <h1>Übersicht</h1>
+<?= ui('page-header', [
+    'title' => 'Übersicht',
+    'description' => 'Dein aktueller Stand auf einen Blick.',
+    'actions' => [[
+        'label' => 'Gerät hinzufügen',
+        'icon' => 'plus',
+        'href' => url('device.edit'),
+        'variant' => 'primary',
+    ]],
+]) ?>
+
+<div class="metric-grid">
+    <?php foreach ([
+        ['devices', 'Geräte', 'server'],
+        ['creds', 'Zugänge', 'key-round'],
+        ['products', 'Produkte', 'package'],
+        ['notes', 'Notizen', 'notebook-pen'],
+    ] as [$route, $label, $icon]): ?>
+        <a class="metric" href="<?= url($route) ?>">
+            <span class="metric__icon"><?= ui('icon', ['name' => $icon]) ?></span>
+            <span class="metric__value"><?= (int) $counts[$route] ?></span>
+            <span class="metric__label"><?= e($label) ?></span>
+        </a>
+    <?php endforeach; ?>
 </div>
 
-<div class="statgrid">
-    <a class="stat" href="<?= url('devices') ?>"><span class="num"><?= (int) $counts['devices'] ?></span>Geräte &amp; Server</a>
-    <a class="stat" href="<?= url('creds') ?>"><span class="num"><?= (int) $counts['creds'] ?></span>Zugänge</a>
-    <a class="stat" href="<?= url('products') ?>"><span class="num"><?= (int) $counts['products'] ?></span>Produkte</a>
-    <a class="stat" href="<?= url('notes') ?>"><span class="num"><?= (int) $counts['notes'] ?></span>Notizen</a>
-</div>
-
-<div class="cols">
-    <section class="card">
-        <h2>Zuletzt geändert</h2>
+<div class="dashboard-grid">
+    <section class="panel">
+        <?= ui('section-header', ['title' => 'Zuletzt geändert', 'description' => 'Geräte mit den neuesten Änderungen']) ?>
         <?php if (!$recent): ?>
-            <p class="muted">Noch keine Geräte. <a href="<?= url('device.edit') ?>">Erstes Gerät anlegen →</a></p>
+            <?= ui('empty-state', ['title' => 'Noch keine Geräte', 'text' => 'Lege dein erstes Gerät an.', 'icon' => 'server', 'compact' => true]) ?>
         <?php else: ?>
-            <ul class="linklist">
+            <ul class="record-list">
                 <?php foreach ($recent as $d): ?>
                     <li>
-                        <a href="<?= url('device.view', ['id' => $d['id']]) ?>"><?= e($d['name']) ?></a>
-                        <span class="tag"><?= e($d['type']) ?></span>
-                        <?php if ($d['ip']): ?><span class="muted mono"><?= e($d['ip']) ?></span><?php endif; ?>
+                        <span class="record-list__icon"><?= ui('icon', ['name' => 'server']) ?></span>
+                        <div>
+                            <a href="<?= url('device.view', ['id' => $d['id']]) ?>"><strong><?= e($d['name']) ?></strong></a>
+                            <span><?= e(\NetDoc\device_type_label($d['type'])) ?><?= $d['ip'] ? ' · ' . e($d['ip']) : '' ?></span>
+                        </div>
                     </li>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
     </section>
 
-    <section class="card">
-        <h2>Ablaufende Produkte / Lizenzen</h2>
+    <section class="panel">
+        <?= ui('section-header', ['title' => 'Anstehende Verlängerungen', 'description' => 'Produkte und Lizenzen nach Ablaufdatum']) ?>
         <?php if (!$expiring): ?>
-            <p class="muted">Keine Ablaufdaten hinterlegt.</p>
+            <?= ui('empty-state', ['title' => 'Keine Fristen offen', 'text' => 'Aktuell sind keine Ablaufdaten hinterlegt.', 'icon' => 'check-circle', 'compact' => true]) ?>
         <?php else: ?>
-            <ul class="linklist">
+            <ul class="record-list">
                 <?php foreach ($expiring as $p): ?>
                     <li>
-                        <a href="<?= url('product.view', ['id' => $p['id']]) ?>"><?= e($p['name']) ?></a>
-                        <span class="tag warn"><?= e($p['expiry_date']) ?></span>
+                        <span class="record-list__icon record-list__icon--warning"><?= ui('icon', ['name' => 'package']) ?></span>
+                        <div>
+                            <a href="<?= url('product.view', ['id' => $p['id']]) ?>"><strong><?= e($p['name']) ?></strong></a>
+                            <span>Fällig am <?= e(fmt_day($p['expiry_date'])) ?></span>
+                        </div>
                     </li>
                 <?php endforeach; ?>
             </ul>

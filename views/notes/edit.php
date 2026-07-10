@@ -2,33 +2,33 @@
 $v = fn(string $k) => e($note[$k] ?? '');
 $selDevice = (int) ($note['device_id'] ?? $preselectDevice);
 ?>
-<div class="pagehead">
-    <h1><?= $note ? 'Notiz bearbeiten' : 'Neue Notiz' ?></h1>
-</div>
+<?= ui('page-header', [
+    'title' => $note ? 'Notiz bearbeiten' : 'Notiz hinzufügen',
+    'description' => 'Halte Abläufe, Entscheidungen und wichtige Hinweise verständlich fest.',
+]) ?>
 
-<form class="card form" method="post" action="<?= url('note.save') ?>">
+<form class="form-panel form-panel--narrow" method="post" action="<?= url('note.save') ?>">
     <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
     <?php if ($note): ?><input type="hidden" name="id" value="<?= (int) $note['id'] ?>"><?php endif; ?>
 
-    <div class="grid2">
-        <label>Titel *<input type="text" name="title" value="<?= $v('title') ?>" required autofocus></label>
-        <label>Gerät / Server
+    <div class="form-grid">
+        <label>Titel <span class="required">Pflichtfeld</span><input type="text" name="title" value="<?= $v('title') ?>" required autofocus></label>
+        <label>Zugeordnetes Gerät
             <select name="device_id">
-                <option value="0">— keins —</option>
+                <option value="0">Nicht zugeordnet</option>
                 <?php foreach ($devices as $d): ?>
                     <option value="<?= (int) $d['id'] ?>" <?= $selDevice === (int) $d['id'] ? 'selected' : '' ?>><?= e($d['name']) ?></option>
                 <?php endforeach; ?>
             </select>
         </label>
     </div>
-    <label>Inhalt<textarea name="body" rows="12"><?= $v('body') ?></textarea></label>
+    <label>Inhalt<textarea name="body" rows="12" placeholder="Was sollte dein Team hierzu wissen?"><?= $v('body') ?></textarea></label>
 
-    <div class="formactions">
-        <button type="submit" class="btn primary">Speichern</button>
-        <a class="btn ghost" href="<?= url('notes') ?>">Abbrechen</a>
+    <div class="form-actions">
+        <?= ui('button', ['label' => 'Speichern', 'icon' => 'check', 'variant' => 'primary', 'type' => 'submit']) ?>
+        <?= ui('button', ['label' => 'Abbrechen', 'icon' => 'x', 'href' => url('notes'), 'variant' => 'quiet']) ?>
         <?php if ($note): ?>
-            <button type="submit" class="btn danger right" formaction="<?= url('note.delete', ['id' => $note['id']]) ?>"
-                    data-confirm="Notiz „<?= e($note['title']) ?>“ wirklich löschen?">Löschen</button>
+            <?= ui('button', ['label' => 'Notiz löschen', 'icon' => 'trash-2', 'variant' => 'danger', 'type' => 'submit', 'class' => 'form-actions__danger', 'attributes' => ['formaction' => url('note.delete', ['id' => $note['id']]), 'data-confirm' => 'Notiz „' . $note['title'] . '“ wirklich löschen?']]) ?>
         <?php endif; ?>
     </div>
 </form>

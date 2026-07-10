@@ -1,20 +1,22 @@
 <?php /** @var array $rows @var string $q */
-$creds = $rows; // Partial erwartet $creds
+$creds = $rows;
 ?>
-<div class="pagehead">
-    <h1>Zugänge &amp; Verbindungen</h1>
-    <a class="btn primary" href="<?= url('cred.edit') ?>">+ Neuer Zugang</a>
-</div>
-
-<form class="filterbar" method="get" action="index.php">
-    <input type="hidden" name="r" value="creds">
-    <input type="search" name="q" value="<?= e($q) ?>" placeholder="Nach Titel, Benutzer, URL…">
-    <button class="btn">Filtern</button>
-    <?php if ($q !== ''): ?><a class="btn ghost" href="<?= url('creds') ?>">×</a><?php endif; ?>
-</form>
+<?= ui('page-header', [
+    'title' => 'Zugänge',
+    'description' => 'Anmeldedaten und Verbindungen sicher an einem Ort.',
+    'actions' => [['label' => 'Zugang hinzufügen', 'icon' => 'plus', 'href' => url('cred.edit'), 'variant' => 'primary']],
+]) ?>
+<?= ui('filter-bar', ['route' => 'creds', 'query' => $q, 'placeholder' => 'Titel, Benutzername oder Adresse']) ?>
 
 <?php if (!$rows): ?>
-    <div class="card"><p class="muted">Keine Zugänge gefunden.</p></div>
+    <?= ui('empty-state', [
+        'title' => $q ? 'Keine passenden Zugänge' : 'Noch keine Zugänge',
+        'text' => $q ? 'Ändere oder lösche den Filter.' : 'Speichere den ersten Zugang und ordne ihn einem Gerät oder Produkt zu.',
+        'icon' => 'key-round',
+        'action' => $q
+            ? ['label' => 'Filter löschen', 'icon' => 'x', 'href' => url('creds')]
+            : ['label' => 'Zugang hinzufügen', 'icon' => 'plus', 'href' => url('cred.edit'), 'variant' => 'primary'],
+    ]) ?>
 <?php else: ?>
-    <div class="card nopad"><?php require VIEWS . '/credentials/_table.php'; ?></div>
+    <div class="data-panel"><?php require VIEWS . '/credentials/_table.php'; ?></div>
 <?php endif; ?>
