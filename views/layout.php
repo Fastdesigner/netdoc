@@ -11,7 +11,10 @@ $nav = [
     'notes'     => ['Notizen', '📝'],
     'documents' => ['Dokumente', '📎'],
 ];
-if (\NetDoc\can_manage_users($u)) {
+if ($active === 'login' && param('diagnose') === '1') {
+    var_dump('[NETDOC_LOGIN_500] Layout user type: ' . get_debug_type($u) . '; management navigation: ' . ($u ? 'evaluate role' : 'skip'));
+}
+if ($u && \NetDoc\can_manage_users($u)) {
     $nav['users'] = ['Benutzer', '👥'];
 }
 function nav_active(string $key, string $active): string {
