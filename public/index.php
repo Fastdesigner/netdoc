@@ -118,7 +118,6 @@ if ($r === 'logout') {
 
 // --- 3) Ab hier: Login-Pflicht ---------------------------------------------
 if (!$auth->check()) {
-    flash('error', 'Bitte zuerst anmelden.');
     redirect('login');
 }
 
